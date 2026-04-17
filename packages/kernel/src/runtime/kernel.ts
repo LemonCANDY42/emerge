@@ -124,17 +124,35 @@ class SimpleMemory implements Memory {
   }
 
   async recall(
-    _query: RecallQuery,
-    _scope: RecallScope,
+    query: RecallQuery,
+    scope: RecallScope,
     budget: RecallBudget,
   ): Promise<Result<RecallResult>> {
-    const maxItems = budget.maxItems ?? this.items.length;
-    const items = this.items.slice(-maxItems);
+    // M12: honour scope.agents and query.attributes filters
+    let filtered = this.items;
+
+    if (scope.agents && scope.agents.length > 0) {
+      const agentSet = new Set<string>(scope.agents);
+      filtered = filtered.filter((item) => {
+        // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature requires bracket notation here
+        const itemAgent = item.attributes["agent"];
+        return itemAgent !== undefined && agentSet.has(String(itemAgent));
+      });
+    }
+
+    if (query.attributes && Object.keys(query.attributes).length > 0) {
+      filtered = filtered.filter((item) =>
+        Object.entries(query.attributes ?? {}).every(([k, v]) => item.attributes[k] === v),
+      );
+    }
+
+    const maxItems = budget.maxItems ?? filtered.length;
+    const items = filtered.slice(-maxItems);
     return {
       ok: true,
       value: {
         items,
-        trace: { items: [], droppedForBudget: Math.max(0, this.items.length - maxItems) },
+        trace: { items: [], droppedForBudget: Math.max(0, filtered.length - maxItems) },
       },
     };
   }
@@ -339,6 +357,17 @@ export class Kernel {
 
     const correlationId = `agent-${spec.id}-${Date.now()}` as CorrelationId;
 
+    // Notify hook for CalibratedSurveillance (or any impl that exposes notifyAssessment)
+    const survInst = this.surveillance;
+    const surveillanceNotify =
+      survInst && "notifyAssessment" in survInst
+        ? (
+            survInst as unknown as {
+              notifyAssessment: (agentId: string, providerId: string, difficulty: string) => void;
+            }
+          ).notifyAssessment.bind(survInst)
+        : undefined;
+
     const runner = new AgentRunner({
       spec,
       provider,
@@ -353,6 +382,9 @@ export class Kernel {
       telemetry: this.deps.telemetry,
       recorder: this.deps.recorder,
       costMeter: this.costMeter,
+      surveillance: this.surveillance,
+      surveillanceNotify,
+      lineageMaxDepth: this.config.lineage.maxDepth,
     });
 
     this.handles.set(spec.id, runner);

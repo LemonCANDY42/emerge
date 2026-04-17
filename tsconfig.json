@@ -10,8 +10,11 @@
     { "path": "./packages/telemetry-jsonl" },
     { "path": "./packages/modes" },
     { "path": "./packages/replay" },
+    { "path": "./packages/surveillance" },
     { "path": "./examples/types-smoke" },
     { "path": "./examples/hello-agent" },
-    { "path": "./examples/replay-smoke" }
+    { "path": "./examples/replay-smoke" },
+    { "path": "./examples/weak-model-decomposition" },
+    { "path": "./examples/cycle-guard-trip" }
   ]
 }

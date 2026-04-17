@@ -32,6 +32,8 @@ interface BufferedSubscription {
   // resolve waiting reader
   resolve: ((env: BusEnvelope) => void) | null;
   closed: boolean;
+  /** M4: count of envelopes dropped due to buffer overflow. */
+  droppedCount: number;
 }
 
 /** Roles config is optional — used only for custodian-and-adjudicator-only ACL checks. */
@@ -80,6 +82,8 @@ function aclScopeForKind(kind: BusEnvelope["kind"], card: AgentCard): AcceptScop
 
 export interface BusDropStats {
   readonly aclBlocked: number;
+  /** M4: per-subscriber drop counts due to buffer overflow. */
+  readonly perSubscriber: ReadonlyMap<AgentId, number>;
 }
 
 export class InMemoryBus implements Bus {
@@ -88,7 +92,8 @@ export class InMemoryBus implements Bus {
   /** C2: registered agent cards for ACL enforcement. */
   private readonly cardRegistry = new Map<AgentId, AgentCard>();
   private readonly roles: RolesConfig;
-  private dropStats = { aclBlocked: 0 };
+  private aclBlocked = 0;
+  private readonly perSubscriberDrops = new Map<AgentId, number>();
 
   constructor(config: BusBackpressureConfig = { bufferSize: 256 }, roles: RolesConfig = {}) {
     this.config = config;
@@ -105,9 +110,12 @@ export class InMemoryBus implements Bus {
     this.cardRegistry.delete(id);
   }
 
-  /** Exposed for observability (M4 deferred). */
+  /** M4: Exposed for observability — includes per-subscriber overflow drop counts. */
   getDropStats(): BusDropStats {
-    return { ...this.dropStats };
+    return {
+      aclBlocked: this.aclBlocked,
+      perSubscriber: new Map(this.perSubscriberDrops),
+    };
   }
 
   async send(env: BusEnvelope): Promise<Result<void>> {
@@ -119,7 +127,7 @@ export class InMemoryBus implements Bus {
         const scope = aclScopeForKind(env.kind, receiverCard);
         const allowed = checkAclScope(scope, env.from, receiverCard, this.roles);
         if (!allowed) {
-          this.dropStats = { aclBlocked: this.dropStats.aclBlocked + 1 };
+          this.aclBlocked++;
           return {
             ok: false,
             error: {
@@ -147,6 +155,7 @@ export class InMemoryBus implements Bus {
       maxSize,
       resolve: null,
       closed: false,
+      droppedCount: 0,
     };
 
     this.subs.add(sub);
@@ -249,8 +258,13 @@ export class InMemoryBus implements Bus {
       if (!this.matches(sub, env)) continue;
 
       if (sub.buffer.length >= sub.maxSize) {
-        // drop oldest
+        // M4: drop oldest and record the drop
         sub.buffer.shift();
+        sub.droppedCount++;
+        this.perSubscriberDrops.set(
+          sub.subscriber,
+          (this.perSubscriberDrops.get(sub.subscriber) ?? 0) + 1,
+        );
       }
       sub.buffer.push(env);
 
@@ -270,11 +284,11 @@ export class InMemoryBus implements Bus {
       return env.to.kind === "agent" && env.to.id === subscriber;
     }
     if (target.kind === "from") {
+      // M5: drop the `toMatch` clause so subscribers observe a sender's
+      // broadcasts to OTHER agents too (not just messages addressed to them).
       const fromMatch = env.from === target.sender;
       const kindMatch = !target.kinds || target.kinds.includes(env.kind);
-      // also deliver to the subscriber if the envelope is addressed to them
-      const toMatch = env.to.kind === "agent" && env.to.id === subscriber;
-      return fromMatch && kindMatch && toMatch;
+      return fromMatch && kindMatch;
     }
     if (target.kind === "topic") {
       const topicMatch =

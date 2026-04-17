@@ -1,13 +1,22 @@
 /**
  * MockProvider — scripted provider for tests/demos without API keys.
+ *
+ * M2 additions:
+ *   - Accepts `tier` to select reproducibility behaviour.
+ *   - When `tier === "pinned"`, maintains a pinned-outcome map keyed by
+ *     (messages hash, tools hash). Divergence recording is wired but is a
+ *     no-op on the deterministic mock (same key always produces the same
+ *     script entry).
  */
 
 import type {
+  Divergence,
   Provider,
   ProviderCapabilities,
   ProviderEvent,
   ProviderMessage,
   ProviderRequest,
+  ReproducibilityTier,
   Result,
 } from "@emerge/kernel/contracts";
 
@@ -16,31 +25,103 @@ export interface MockScriptEntry {
   readonly events: readonly ProviderEvent[];
 }
 
+export interface MockProviderConfig {
+  readonly id?: string;
+  readonly tier?: ReproducibilityTier;
+  readonly divergenceSink?: (d: Divergence) => void;
+}
+
+/** Simple djb2-style hash for the pinned-outcome key (no node:crypto needed). */
+function simpleHash(s: string): number {
+  let h = 5381;
+  for (let i = 0; i < s.length; i++) {
+    h = ((h << 5) + h) ^ (s.charCodeAt(i) | 0);
+    h |= 0; // keep 32-bit
+  }
+  return h >>> 0;
+}
+
+/** Key for the pinned-outcome map. */
+function hashKey(messages: readonly ProviderMessage[], tools?: readonly unknown[]): string {
+  const msgHash = simpleHash(JSON.stringify(messages)).toString(16);
+  const toolHash = simpleHash(JSON.stringify(tools ?? [])).toString(16);
+  return `${msgHash}:${toolHash}`;
+}
+
 export class MockProvider implements Provider {
   readonly capabilities: ProviderCapabilities;
   private readonly script: readonly MockScriptEntry[];
+  private readonly tier: ReproducibilityTier;
+  private readonly divergenceSink: ((d: Divergence) => void) | undefined;
   /** Number of times invoke() has been called. Public for replay assertions. */
   callIndex = 0;
+  /** Pinned-outcome map: (messages hash + tools hash) → script index at pin time. */
+  private readonly pinnedOutcomes = new Map<string, number>();
 
-  constructor(script: readonly MockScriptEntry[], id = "mock") {
+  constructor(
+    script: readonly MockScriptEntry[],
+    idOrConfig: string | MockProviderConfig = "mock",
+  ) {
     this.script = script;
-    this.capabilities = {
-      id,
-      claimed: {
-        contextWindow: 200_000,
-        maxOutputTokens: 8192,
-        nativeToolUse: true,
-        streamingToolUse: true,
-        vision: false,
-        audio: false,
-        thinking: false,
-        latencyTier: "interactive",
-      },
-    };
+    if (typeof idOrConfig === "string") {
+      this.tier = "free";
+      this.divergenceSink = undefined;
+      this.capabilities = {
+        id: idOrConfig,
+        claimed: {
+          contextWindow: 200_000,
+          maxOutputTokens: 8192,
+          nativeToolUse: true,
+          streamingToolUse: true,
+          vision: false,
+          audio: false,
+          thinking: false,
+          latencyTier: "interactive",
+        },
+      };
+    } else {
+      this.tier = idOrConfig.tier ?? "free";
+      this.divergenceSink = idOrConfig.divergenceSink;
+      this.capabilities = {
+        id: idOrConfig.id ?? "mock",
+        claimed: {
+          contextWindow: 200_000,
+          maxOutputTokens: 8192,
+          nativeToolUse: true,
+          streamingToolUse: true,
+          vision: false,
+          audio: false,
+          thinking: false,
+          latencyTier: "interactive",
+        },
+      };
+    }
   }
 
   async *invoke(req: ProviderRequest): AsyncIterable<ProviderEvent> {
-    const entry = this.script[this.callIndex % this.script.length];
+    const index = this.callIndex % this.script.length;
+
+    if (this.tier === "pinned") {
+      const key = hashKey(req.messages, req.tools);
+      const pinnedIndex = this.pinnedOutcomes.get(key);
+      if (pinnedIndex !== undefined && pinnedIndex !== index) {
+        // Record divergence — deterministic mock never actually diverges, but
+        // the API is wired for compliance with the contract.
+        this.divergenceSink?.({
+          at: Date.now(),
+          providerId: this.capabilities.id,
+          tier: "pinned",
+          category: "stop_reason",
+          expectedHash: String(pinnedIndex),
+          actualHash: String(index),
+          note: "MockProvider pinned-outcome index mismatch (unexpected in deterministic mock)",
+        });
+      } else {
+        this.pinnedOutcomes.set(key, index);
+      }
+    }
+
+    const entry = this.script[index];
     this.callIndex++;
 
     if (!entry) {

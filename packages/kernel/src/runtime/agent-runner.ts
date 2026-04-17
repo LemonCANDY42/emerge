@@ -35,6 +35,8 @@ import type {
   ToolResult,
 } from "../contracts/index.js";
 import type { SessionRecorder } from "../contracts/replay.js";
+import type { AssessmentInput, StepProfile, Surveillance } from "../contracts/surveillance.js";
+import { runDecomposition } from "./decomposition.js";
 import type { Scheduler } from "./scheduler.js";
 
 export interface AgentRunnerDeps {
@@ -51,6 +53,13 @@ export interface AgentRunnerDeps {
   telemetry?: Telemetry | undefined;
   recorder?: SessionRecorder | undefined;
   costMeter?: CostMeter | undefined;
+  surveillance?: Surveillance | undefined;
+  /** Callback so CalibratedSurveillance can stash the last assessed context for observe(). */
+  surveillanceNotify?:
+    | ((agentId: AgentId, providerId: string, difficulty: StepProfile["difficulty"]) => void)
+    | undefined;
+  /** Lineage maxDepth from KernelConfig — needed for decomposition guard. */
+  lineageMaxDepth?: number | undefined;
 }
 
 function makeCard(spec: AgentSpec, provider: Provider): AgentCard {
@@ -131,10 +140,15 @@ export class AgentRunner implements AgentHandle {
       messages.push({ role: "system", content: spec.system.text });
     }
 
-    // Fetch initial memory
+    // Fetch initial memory — M12: honour memoryView scope
+    // By default sub-agents only see their own memory (no inherit from supervisor).
+    const memAgents = spec.memoryView.inheritFromSupervisor
+      ? undefined // undefined = all agents visible
+      : [this.id];
+    const memQuery = spec.memoryView.readFilter ? { attributes: spec.memoryView.readFilter } : {};
     const memResult = await this.deps.memory.recall(
-      {},
-      { session: sessionId, agents: [this.id] },
+      memQuery,
+      { session: sessionId, ...(memAgents !== undefined ? { agents: memAgents } : {}) },
       { maxItems: 20 },
     );
     if (memResult.ok) {
@@ -148,6 +162,8 @@ export class AgentRunner implements AgentHandle {
 
     // M2: monotonic delta seq per request — reset for each provider call
     let deltaSeq = 0;
+    // M2: track how many times this agent has triggered decomposition in this run
+    let localDecompositionCount = 0;
 
     while (true) {
       const stepResult = scheduler.preStep(schedState, sessionId, correlationId);
@@ -171,6 +187,121 @@ export class AgentRunner implements AgentHandle {
       }
 
       this.setState("thinking");
+
+      // --- M2: Surveillance assessment before each step ---
+      // Effective depth = spawned depth + how many decompositions this agent has run
+      const decompositionDepth = (spec.lineage.depth ?? 0) + localDecompositionCount;
+
+      if (
+        this.deps.surveillance &&
+        (spec.surveillance === "active" || spec.surveillance === "strict")
+      ) {
+        // Build a synthetic StepProfile for this iteration
+        const stepProfile: StepProfile = {
+          stepId: `${this.id}-step-${schedState.iteration}`,
+          difficulty: "medium", // default; callers may set spec.surveillance with richer context
+          goal: spec.system.kind === "literal" ? spec.system.text.slice(0, 200) : "agent task",
+          tools: spec.toolsAllowed as readonly string[],
+        };
+
+        const assessInput: AssessmentInput = {
+          agent: this.id,
+          providerId: this.deps.provider.capabilities.id,
+          capabilities: this.deps.provider.capabilities,
+          step: stepProfile,
+          decompositionDepth,
+        };
+
+        this.deps.surveillanceNotify?.(
+          this.id,
+          this.deps.provider.capabilities.id,
+          stepProfile.difficulty,
+        );
+
+        const recommendation = await this.deps.surveillance.assess(assessInput);
+
+        if (this.deps.recorder) {
+          this.deps.recorder.record({
+            kind: "surveillance_recommendation",
+            at: Date.now(),
+            input: assessInput,
+            recommendation,
+          });
+        }
+
+        if (recommendation.kind === "decompose") {
+          localDecompositionCount++;
+          // Opaque adaptive decomposition path
+          const decompResult = await runDecomposition({
+            step: stepProfile,
+            decompositionDepth,
+            lineageConfig: { maxDepth: this.deps.lineageMaxDepth ?? 4 },
+            provider: this.deps.provider,
+            parentMessages: [...messages],
+            signal: schedState.abortController.signal,
+          });
+
+          console.log(
+            `[surveillance] decomposed step into ${decompResult.subStepCount} sub-steps: ${decompResult.subStepGoals.join(" | ")}`,
+          );
+
+          // Inject the combined result as if it were a tool result
+          const syntheticContent: ProviderContent[] = [
+            {
+              type: "tool_result",
+              toolCallId: `decomp-${this.id}-${schedState.iteration}`,
+              output: decompResult.combinedResult.preview,
+            },
+          ];
+          messages.push({ role: "user", content: syntheticContent });
+
+          await this.deps.surveillance.observe({
+            stepId: stepProfile.stepId,
+            agent: this.id,
+            success: decompResult.combinedResult.ok,
+            retries: 0,
+            toolErrors: 0,
+            selfCorrections: 0,
+            wallMs: 0,
+            costOvershoot: 1.0,
+          });
+
+          // Continue loop — the injected result will inform the next provider call
+          continue;
+        }
+
+        if (recommendation.kind === "scaffold") {
+          // Inject scaffold additions as a system message append
+          for (const addition of recommendation.additions) {
+            messages.push({
+              role: "user",
+              content: [{ type: "text", text: `[scaffold:${addition.kind}] ${addition.content}` }],
+            });
+          }
+          console.log(`[surveillance] scaffolding injected: ${recommendation.rationale}`);
+          // Proceed with the scaffolded context
+        }
+
+        if (recommendation.kind === "escalate") {
+          // M2: log and treat as proceed (router is M3+)
+          console.log(`[surveillance] escalation deferred (M3+): ${recommendation.rationale}`);
+        }
+
+        if (recommendation.kind === "defer") {
+          // Emit human.request and continue (simplified — full pause is M3+)
+          await bus.send({
+            kind: "human.request",
+            correlationId,
+            sessionId,
+            from: this.id,
+            to: { kind: "broadcast" },
+            timestamp: Date.now(),
+            prompt: recommendation.checkpoint,
+          });
+          console.log(`[surveillance] deferred to human: ${recommendation.checkpoint}`);
+        }
+      }
+      // --- end surveillance ---
 
       // Build provider tool specs
       const providerTools = tools.map((t) => ({
@@ -264,6 +395,35 @@ export class AgentRunner implements AgentHandle {
 
       scheduler.recordUsage(schedState, stopUsage);
       this._lastActivityAt = Date.now();
+
+      // --- M2: Surveillance observe after each step ---
+      if (this.deps.surveillance) {
+        const stepFailed = stopReason === "error";
+        const cycleHits = schedState.cycleGuard.shouldInterrupt(this.id) ? 1 : 0;
+        // forecast: use costMeter if available; else treat forecast = actual
+        const forecastUsd = this.deps.costMeter
+          ? this.deps.costMeter.forecast({
+              agent: this.id,
+              description: "step forecast",
+              tokenEstimateIn: stopUsage.tokensIn,
+              tokenEstimateOut: stopUsage.tokensOut,
+            }).p50
+          : stopUsage.usd;
+        const costOvershoot = forecastUsd > 0 ? stopUsage.usd / forecastUsd : 1.0;
+
+        await this.deps.surveillance.observe({
+          stepId: `${this.id}-step-${schedState.iteration}`,
+          agent: this.id,
+          success: !stepFailed,
+          retries: 0,
+          toolErrors: 0,
+          selfCorrections: 0,
+          wallMs: stopUsage.wallMs,
+          costOvershoot,
+          cycleHits,
+        });
+      }
+      // --- end surveillance observe ---
 
       // Append assistant message
       const assistantContent: ProviderContent[] = [];

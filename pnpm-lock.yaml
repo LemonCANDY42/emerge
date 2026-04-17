@@ -15,6 +15,19 @@ importers:
         specifier: ^5.6.3
         version: 5.9.3
 
+  examples/cycle-guard-trip:
+    dependencies:
+      '@emerge/kernel':
+        specifier: workspace:*
+        version: link:../../packages/kernel
+      '@emerge/provider-mock':
+        specifier: workspace:*
+        version: link:../../packages/providers/mock
+    devDependencies:
+      '@types/node':
+        specifier: ^20.11.0
+        version: 20.19.39
+
   examples/hello-agent:
     dependencies:
       '@emerge/kernel':
@@ -71,6 +84,25 @@ importers:
         specifier: workspace:*
         version: link:../../packages/kernel
 
+  examples/weak-model-decomposition:
+    dependencies:
+      '@emerge/kernel':
+        specifier: workspace:*
+        version: link:../../packages/kernel
+      '@emerge/modes':
+        specifier: workspace:*
+        version: link:../../packages/modes
+      '@emerge/provider-mock':
+        specifier: workspace:*
+        version: link:../../packages/providers/mock
+      '@emerge/surveillance':
+        specifier: workspace:*
+        version: link:../../packages/surveillance
+    devDependencies:
+      '@types/node':
+        specifier: ^20.11.0
+        version: 20.19.39
+
   packages/kernel:
     devDependencies:
       '@types/node':
@@ -113,6 +145,12 @@ importers:
         version: 20.19.39
 
   packages/sandbox-inproc:
+    dependencies:
+      '@emerge/kernel':
+        specifier: workspace:*
+        version: link:../kernel
+
+  packages/surveillance:
     dependencies:
       '@emerge/kernel':
         specifier: workspace:*

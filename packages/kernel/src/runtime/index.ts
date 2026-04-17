@@ -10,3 +10,5 @@ export { Kernel } from "./kernel.js";
 export type { KernelDeps } from "./kernel.js";
 export type { AgentRunnerDeps } from "./agent-runner.js";
 export type { SchedulerAgentState, StepResult } from "./scheduler.js";
+export { runDecomposition } from "./decomposition.js";
+export type { DecompositionInput, DecompositionResult } from "./decomposition.js";
