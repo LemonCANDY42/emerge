@@ -3,6 +3,7 @@
  */
 
 import type { CostMeter } from "../contracts/cost.js";
+import type { ExperienceLibrary } from "../contracts/experience.js";
 import type {
   AgentHandle,
   AgentId,
@@ -239,6 +240,7 @@ export class Kernel {
   private memory: Memory;
   private sandbox: Sandbox;
   private surveillance: Surveillance | undefined;
+  private experienceLibrary: ExperienceLibrary | undefined;
   private readonly deps: KernelDeps;
   private readonly providers = new Map<string, Provider>();
   private sessionId: SessionId = `sess-${Date.now()}` as SessionId;
@@ -263,6 +265,14 @@ export class Kernel {
 
   mountProvider(provider: Provider): void {
     this.providers.set(provider.capabilities.id, provider);
+  }
+
+  /**
+   * Attach an experience library so surveillance can use historical hints as priors.
+   * Without a mounted library, experienceHints are undefined — which is honest.
+   */
+  mountExperienceLibrary(library: ExperienceLibrary): void {
+    this.experienceLibrary = library;
   }
 
   mountSurveillance(s: Surveillance): void {
@@ -385,6 +395,7 @@ export class Kernel {
       surveillance: this.surveillance,
       surveillanceNotify,
       lineageMaxDepth: this.config.lineage.maxDepth,
+      experienceLibrary: this.experienceLibrary,
     });
 
     this.handles.set(spec.id, runner);

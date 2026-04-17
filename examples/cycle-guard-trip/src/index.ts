@@ -158,19 +158,11 @@ async function main() {
   console.log(`Agent final state: ${snapshot.state}`);
   console.log(`Stop reason: ${stopReason}`);
 
-  // Guard fired if: fewer than maxIterations (20) runs and reason includes cycle/guard
-  const guardFired =
-    stopReason.includes("cycle_guard") ||
-    stopReason.includes("max_iterations") ||
-    provider.callIndex < 10; // guard should fire well before 10 calls
-
-  if (guardFired) {
+  if (stopReason === "cycle_guard") {
     console.log("\nINTERRUPTED");
     process.exit(0);
   } else {
-    console.error(
-      `\nFAILED: expected cycle guard to trip before 10 calls, got ${provider.callIndex}`,
-    );
+    console.error(`\nFAIL: expected cycle_guard but got ${stopReason}`);
     process.exit(1);
   }
 }

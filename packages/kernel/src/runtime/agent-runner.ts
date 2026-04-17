@@ -3,6 +3,7 @@
  */
 
 import { createHash } from "node:crypto";
+import type { ExperienceLibrary, ExperienceMatch } from "../contracts/experience.js";
 import type {
   AgentCard,
   AgentHandle,
@@ -60,6 +61,12 @@ export interface AgentRunnerDeps {
     | undefined;
   /** Lineage maxDepth from KernelConfig — needed for decomposition guard. */
   lineageMaxDepth?: number | undefined;
+  /**
+   * Optional experience library. When present, hints are fetched before assess()
+   * and passed as experienceHints. Without a mounted library, hints are undefined,
+   * which is honest — surveillance proceeds without priors.
+   */
+  experienceLibrary?: ExperienceLibrary | undefined;
 }
 
 function makeCard(spec: AgentSpec, provider: Provider): AgentCard {
@@ -204,12 +211,29 @@ export class AgentRunner implements AgentHandle {
           tools: spec.toolsAllowed as readonly string[],
         };
 
+        // Fetch experience hints if a library is mounted; skip on error so the
+        // hot path is never blocked by a non-critical hint failure.
+        let experienceHints: ExperienceMatch[] | undefined;
+        if (this.deps.experienceLibrary) {
+          const hintResult = await this.deps.experienceLibrary.hint(
+            {
+              taskType: stepProfile.goal.slice(0, 50),
+              description: stepProfile.goal,
+            },
+            { maxItems: 5, maxTokens: 1000 },
+          );
+          if (hintResult.ok) {
+            experienceHints = [...hintResult.value];
+          }
+        }
+
         const assessInput: AssessmentInput = {
           agent: this.id,
           providerId: this.deps.provider.capabilities.id,
           capabilities: this.deps.provider.capabilities,
           step: stepProfile,
           decompositionDepth,
+          ...(experienceHints !== undefined ? { experienceHints } : {}),
         };
 
         this.deps.surveillanceNotify?.(
@@ -245,15 +269,17 @@ export class AgentRunner implements AgentHandle {
             `[surveillance] decomposed step into ${decompResult.subStepCount} sub-steps: ${decompResult.subStepGoals.join(" | ")}`,
           );
 
-          // Inject the combined result as if it were a tool result
-          const syntheticContent: ProviderContent[] = [
-            {
-              type: "tool_result",
-              toolCallId: `decomp-${this.id}-${schedState.iteration}`,
-              output: decompResult.combinedResult.preview,
-            },
-          ];
-          messages.push({ role: "user", content: syntheticContent });
+          // Inject combined result as a plain user text message — portable shape that
+          // avoids requiring a paired tool_use block (which any real provider would reject).
+          messages.push({
+            role: "user",
+            content: [
+              {
+                type: "text",
+                text: `Decomposition complete. Combined result: ${decompResult.combinedResult.preview}`,
+              },
+            ],
+          });
 
           await this.deps.surveillance.observe({
             stepId: stepProfile.stepId,
@@ -288,7 +314,7 @@ export class AgentRunner implements AgentHandle {
         }
 
         if (recommendation.kind === "defer") {
-          // Emit human.request and continue (simplified — full pause is M3+)
+          // 1. Emit human.request so the orchestrator/UI can act on it.
           await bus.send({
             kind: "human.request",
             correlationId,
@@ -298,7 +324,71 @@ export class AgentRunner implements AgentHandle {
             timestamp: Date.now(),
             prompt: recommendation.checkpoint,
           });
-          console.log(`[surveillance] deferred to human: ${recommendation.checkpoint}`);
+          console.log(`[surveillance] waiting for human input: ${recommendation.checkpoint}`);
+
+          // 2. Block until a correlated human.reply or human.timeout arrives.
+          this.setState("waiting_for_human");
+          const humanTimeout = spec.termination.maxWallMs;
+          const humanSub = bus.subscribe(this.id, { kind: "self" });
+          let humanResolved = false;
+
+          const humanWait = new Promise<"replied" | "timeout">((resolve) => {
+            const timer = setTimeout(() => {
+              if (!humanResolved) resolve("timeout");
+            }, humanTimeout);
+
+            void (async () => {
+              for await (const env of humanSub.events) {
+                if (schedState.abortController.signal.aborted) {
+                  clearTimeout(timer);
+                  resolve("timeout");
+                  return;
+                }
+                if (env.correlationId !== correlationId) continue;
+                if (env.kind === "human.reply") {
+                  clearTimeout(timer);
+                  // Inject the human reply as a user text message.
+                  const replyText =
+                    typeof env.reply === "string" ? env.reply : JSON.stringify(env.reply);
+                  messages.push({
+                    role: "user",
+                    content: [{ type: "text", text: replyText }],
+                  });
+                  resolve("replied");
+                  return;
+                }
+                if (env.kind === "human.timeout") {
+                  clearTimeout(timer);
+                  resolve("timeout");
+                  return;
+                }
+              }
+              clearTimeout(timer);
+              resolve("timeout");
+            })();
+          });
+
+          const humanOutcome = await humanWait;
+          humanResolved = true;
+          humanSub.close();
+
+          if (humanOutcome === "timeout") {
+            // 3. Terminate with stopReason human_timeout — do not call provider.
+            this.setState("completed");
+            await bus.send({
+              kind: "result",
+              correlationId,
+              sessionId,
+              from: this.id,
+              to: { kind: "broadcast" },
+              timestamp: Date.now(),
+              payload: { reason: "human_timeout", checkpoint: recommendation.checkpoint },
+            });
+            return;
+          }
+          // If replied, fall through — the injected reply text will be in messages
+          // and the outer loop will call the provider on the next iteration.
+          continue;
         }
       }
       // --- end surveillance ---

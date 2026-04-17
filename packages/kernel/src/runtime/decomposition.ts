@@ -144,10 +144,9 @@ export async function runDecomposition(input: DecompositionInput): Promise<Decom
     subResults.push(result);
   }
 
-  // Combine into a single preview — inner agent sees this as one opaque result
-  const preview = subResults
-    .map((r, i) => `[Part ${i + 1}/${subResults.length}]: ${r}`)
-    .join("\n\n");
+  // Combine into a single continuous narrative — no "[Part N/M]" markers so the
+  // inner agent sees one opaque output rather than a partitioned recursion trace.
+  const preview = subResults.join("\n\n");
 
   return {
     combinedResult: {

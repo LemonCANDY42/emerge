@@ -64,13 +64,19 @@ export const DEFAULT_PROBES: readonly Probe[] = [
   },
 ];
 
-// Rolling window entry for per-(provider, difficulty) stats
+// Sliding-window stats bucket — outcomes are capped at windowSize so early
+// observations don't anchor the failure rate permanently (M1 fix).
+const STATS_WINDOW_SIZE = 50;
+
 interface StatsBucket {
-  total: number;
-  failures: number;
-  retries: number;
-  toolErrors: number;
-  costOvershoots: number; // overshoot >= 1.5 counts
+  /** Circular buffer of recent outcomes; length <= STATS_WINDOW_SIZE. */
+  outcomes: Array<"success" | "failure">;
+  /** Whether each recent step had any retries. */
+  hadRetry: boolean[];
+  /** Whether each recent step had any tool errors. */
+  hadToolError: boolean[];
+  /** Whether each recent step was a cost-overshoot (ratio >= 1.5). */
+  hadCostOvershoot: boolean[];
 }
 
 function difficultyRank(d: StepProfile["difficulty"]): number {
@@ -94,11 +100,23 @@ export interface CalibratedSurveillanceConfig {
   /** Pre-seeded envelope data (used in tests or when runProbes is skipped). */
   readonly envelope?: ReadonlyMap<string, ObservedCapabilities>;
   readonly experienceLibrary?: ExperienceLibrary;
+  /**
+   * When set, the model's probe ceiling is "trivial" AND the step difficulty is
+   * "large" or "research", surveillance emits escalate delegating to this provider.
+   */
+  readonly escalateTo?: ProviderId;
+  /**
+   * When true, a sustained budget-overshoot rate (costOvershoot >= 1.5) near
+   * the decomposition depth limit emits defer instead of decompose.
+   */
+  readonly deferOnBudgetOvershoot?: boolean;
 }
 
 export class CalibratedSurveillance implements Surveillance, ExperienceAware {
   private readonly maxDepth: number;
   private readonly failureRateThreshold: number;
+  private readonly escalateTo: ProviderId | undefined;
+  private readonly deferOnBudgetOvershoot: boolean;
   private experienceLibrary: ExperienceLibrary | undefined;
 
   // Rolling stats: key = `${providerId}::${difficulty}`
@@ -111,6 +129,8 @@ export class CalibratedSurveillance implements Surveillance, ExperienceAware {
   constructor(config: CalibratedSurveillanceConfig) {
     this.maxDepth = config.maxDepth;
     this.failureRateThreshold = config.failureRateThreshold ?? 0.25;
+    this.escalateTo = config.escalateTo;
+    this.deferOnBudgetOvershoot = config.deferOnBudgetOvershoot ?? false;
     this.experienceLibrary = config.experienceLibrary;
     if (config.envelope) {
       for (const [k, v] of config.envelope) {
@@ -136,10 +156,14 @@ export class CalibratedSurveillance implements Surveillance, ExperienceAware {
     }
 
     const bucket = this.getBucket(providerId, step.difficulty);
-    const failureRate = bucket.total > 0 ? bucket.failures / bucket.total : 0;
+    const windowLen = bucket.outcomes.length;
+    // Compute rates from the sliding window so early failures don't anchor stats.
+    const failureRate =
+      windowLen > 0 ? bucket.outcomes.filter((o) => o === "failure").length / windowLen : 0;
     const cycleHitsBucket = this.getCycleHitsBucket(providerId);
     const hasCycleHits = cycleHitsBucket > 0;
-    const costOvershootRate = bucket.total > 0 ? bucket.costOvershoots / bucket.total : 0;
+    const costOvershootRate =
+      windowLen > 0 ? bucket.hadCostOvershoot.filter(Boolean).length / windowLen : 0;
 
     // Cycle-guard hits bias toward scaffold
     if (hasCycleHits) {
@@ -168,13 +192,44 @@ export class CalibratedSurveillance implements Surveillance, ExperienceAware {
     const stepRank = difficultyRank(step.difficulty);
     const ceilingRank = difficultyRank(competenceCeiling);
 
+    // Escalate: probe ceiling is "trivial" AND step difficulty is "large" or "research"
+    // AND an escalation target was configured — gap >= 2 levels above trivial.
+    if (
+      this.escalateTo !== undefined &&
+      competenceCeiling === "trivial" &&
+      (step.difficulty === "large" || step.difficulty === "research")
+    ) {
+      return {
+        kind: "escalate",
+        delegateTo: this.escalateTo,
+        rationale: `step difficulty '${step.difficulty}' exceeds calibrated ceiling '${competenceCeiling}' by ≥2 levels; escalating to ${this.escalateTo}`,
+      };
+    }
+
+    // Defer: budget-overshoot rate is sustained AND we are near the maximum
+    // decomposition depth — cannot decompose further, needs human checkpoint.
+    const overshootCount = bucket.hadCostOvershoot.filter(Boolean).length;
+    if (
+      this.deferOnBudgetOvershoot &&
+      overshootCount >= 1 &&
+      windowLen > 0 &&
+      costOvershootRate >= 0.5 &&
+      decompositionDepth >= this.maxDepth - 1
+    ) {
+      return {
+        kind: "defer",
+        checkpoint: "budget-near-exhaustion",
+        rationale: `sustained cost-overshoot rate ${(costOvershootRate * 100).toFixed(0)}% at decomposition depth ${decompositionDepth}/${this.maxDepth}; cannot decompose further — needs human`,
+      };
+    }
+
     // Experience hints can adjust confidence
     const experienceBoost = this.scoreExperienceHints(input);
 
     // The step is within the model's envelope
     if (stepRank <= ceilingRank) {
       // Repeated failures at this difficulty class suggest decompose
-      if (failureRate >= this.failureRateThreshold && bucket.total >= 3) {
+      if (failureRate >= this.failureRateThreshold && windowLen >= 3) {
         return {
           kind: "decompose",
           subSteps: [],
@@ -203,7 +258,7 @@ export class CalibratedSurveillance implements Surveillance, ExperienceAware {
 
     if (gap === 1) {
       // One level above ceiling — could still try, but biased toward decompose on repeated failures
-      if (failureRate >= this.failureRateThreshold && bucket.total >= 2) {
+      if (failureRate >= this.failureRateThreshold && windowLen >= 2) {
         return {
           kind: "decompose",
           subSteps: [],
@@ -249,26 +304,39 @@ export class CalibratedSurveillance implements Surveillance, ExperienceAware {
     const key = this.bucketKey(providerId, difficulty);
     let bucket = this.stats.get(key);
     if (!bucket) {
-      bucket = { total: 0, failures: 0, retries: 0, toolErrors: 0, costOvershoots: 0 };
+      bucket = { outcomes: [], hadRetry: [], hadToolError: [], hadCostOvershoot: [] };
       this.stats.set(key, bucket);
     }
 
-    bucket.total++;
-    if (!obs.success) bucket.failures++;
-    if (obs.retries > 0) bucket.retries++;
-    if (obs.toolErrors > 0) bucket.toolErrors++;
-    if (obs.costOvershoot !== undefined && obs.costOvershoot >= 1.5) bucket.costOvershoots++;
+    // Sliding window: evict oldest entry when window is full.
+    if (bucket.outcomes.length >= STATS_WINDOW_SIZE) {
+      bucket.outcomes.shift();
+      bucket.hadRetry.shift();
+      bucket.hadToolError.shift();
+      bucket.hadCostOvershoot.shift();
+    }
+    bucket.outcomes.push(obs.success ? "success" : "failure");
+    bucket.hadRetry.push(obs.retries > 0);
+    bucket.hadToolError.push(obs.toolErrors > 0);
+    bucket.hadCostOvershoot.push(obs.costOvershoot !== undefined && obs.costOvershoot >= 1.5);
 
-    // Update cycleHits tracking
+    // Update cycleHits tracking. Decay by 1 on each successful step so a single
+    // cycle hit does not poison the entire session (M2 fix).
     if (obs.cycleHits !== undefined && obs.cycleHits > 0) {
       this.cycleHitsCounter.set(
         providerId,
         (this.cycleHitsCounter.get(providerId) ?? 0) + obs.cycleHits,
       );
+    } else if (obs.success) {
+      const current = this.cycleHitsCounter.get(providerId) ?? 0;
+      if (current > 0) {
+        this.cycleHitsCounter.set(providerId, current - 1);
+      }
     }
 
-    // Update ObservedCapabilities
-    const toolErrorRate = bucket.total > 0 ? bucket.toolErrors / bucket.total : 0;
+    // Update ObservedCapabilities using the current window.
+    const wLen = bucket.outcomes.length;
+    const toolErrorRate = wLen > 0 ? bucket.hadToolError.filter(Boolean).length / wLen : 0;
     const existing = this.envelopeMap.get(providerId) ?? {};
     this.envelopeMap.set(providerId, {
       ...existing,
@@ -343,7 +411,7 @@ export class CalibratedSurveillance implements Surveillance, ExperienceAware {
     const key = this.bucketKey(providerId, difficulty);
     let b = this.stats.get(key);
     if (!b) {
-      b = { total: 0, failures: 0, retries: 0, toolErrors: 0, costOvershoots: 0 };
+      b = { outcomes: [], hadRetry: [], hadToolError: [], hadCostOvershoot: [] };
       this.stats.set(key, b);
     }
     return b;
