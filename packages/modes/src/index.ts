@@ -181,9 +181,27 @@ export class BuiltinModeRegistry implements ModeRegistry {
   }
 }
 
-/** Convenience: get PermissionPolicy for a named mode. */
+/** Convenience: get PermissionPolicy for a named mode (throws on unknown). */
 export function permissionPolicyForMode(registry: ModeRegistry, name: ModeName): PermissionPolicy {
   const mode = registry.resolve(name);
   if (!mode) throw new Error(`Unknown mode: ${String(name)}`);
   return mode.permissionPolicy;
+}
+
+/**
+ * m9: Safe variant that returns Result<PermissionPolicy> instead of throwing.
+ * Prefer this in code that handles unknown mode names gracefully.
+ */
+export function permissionPolicyForModeResult(
+  registry: ModeRegistry,
+  name: ModeName,
+): import("@emerge/kernel/contracts").Result<PermissionPolicy> {
+  const mode = registry.resolve(name);
+  if (!mode) {
+    return {
+      ok: false,
+      error: { code: "E_UNKNOWN_MODE", message: `Unknown mode: ${String(name)}` },
+    };
+  }
+  return { ok: true, value: mode.permissionPolicy };
 }

@@ -4,12 +4,14 @@
 
 import Anthropic from "@anthropic-ai/sdk";
 import type {
+  Divergence,
   Provider,
   ProviderCapabilities,
   ProviderEvent,
   ProviderMessage,
   ProviderRequest,
   ProviderToolSpec,
+  ReproducibilityTier,
   Result,
 } from "@emerge/kernel/contracts";
 
@@ -17,6 +19,16 @@ export interface AnthropicProviderConfig {
   readonly apiKey?: string;
   readonly model?: string;
   readonly baseURL?: string;
+  /** Reproducibility tier. "pinned" pins temperature/top-p and passes seed when available. */
+  readonly tier?: ReproducibilityTier;
+  /** Fixed seed for pinned tier (best-effort — Anthropic API may not honour it). */
+  readonly pinSeed?: number;
+  /** Fixed temperature for pinned tier. Default 0 (most deterministic). */
+  readonly pinTemperature?: number;
+  /** Fixed top-p for pinned tier. */
+  readonly pinTopP?: number;
+  /** Sink for divergence records when pinned tier detects mismatches. */
+  readonly divergenceSink?: (d: Divergence) => void;
 }
 
 const DEFAULT_MODEL = "claude-opus-4-7";
@@ -25,9 +37,19 @@ export class AnthropicProvider implements Provider {
   readonly capabilities: ProviderCapabilities;
   private readonly client: Anthropic;
   private readonly model: string;
+  private readonly tier: ReproducibilityTier;
+  private readonly pinSeed: number | undefined;
+  private readonly pinTemperature: number;
+  private readonly pinTopP: number | undefined;
+  private readonly divergenceSink: ((d: Divergence) => void) | undefined;
 
   constructor(config: AnthropicProviderConfig = {}) {
     this.model = config.model ?? DEFAULT_MODEL;
+    this.tier = config.tier ?? "free";
+    this.pinSeed = config.pinSeed;
+    this.pinTemperature = config.pinTemperature ?? 0;
+    this.pinTopP = config.pinTopP;
+    this.divergenceSink = config.divergenceSink;
     this.client = new Anthropic({
       // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature requires bracket notation
       apiKey: config.apiKey ?? process.env["ANTHROPIC_API_KEY"],
@@ -128,8 +150,28 @@ export class AnthropicProvider implements Provider {
       };
       if (systemText) streamParams.system = systemText;
       if (anthropicTools) streamParams.tools = anthropicTools;
-      if (req.temperature !== undefined) streamParams.temperature = req.temperature;
       if (req.stopSequences) streamParams.stop_sequences = [...req.stopSequences];
+
+      // Pinned tier: override temperature/top-p for best-effort reproducibility
+      if (this.tier === "pinned") {
+        streamParams.temperature = this.pinTemperature;
+        if (this.pinTopP !== undefined) streamParams.top_p = this.pinTopP;
+        // Anthropic API does not expose a 'seed' parameter in the public SDK;
+        // record a non-fatal Divergence noting that seed pinning isn't available.
+        if (this.pinSeed !== undefined) {
+          this.divergenceSink?.({
+            at: Date.now(),
+            providerId: this.capabilities.id,
+            tier: "pinned",
+            category: "stop_reason",
+            expectedHash: String(this.pinSeed),
+            actualHash: "n/a",
+            note: "Anthropic SDK does not expose seed pinning; temperature pinned to 0 instead",
+          });
+        }
+      } else if (req.temperature !== undefined) {
+        streamParams.temperature = req.temperature;
+      }
 
       // M9: capture wall time around the actual API call
       const startMs = Date.now();

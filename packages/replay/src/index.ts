@@ -35,10 +35,12 @@ export class InMemorySessionRecorder implements SessionRecorder {
   }
 
   record(event: RecordedEvent): void {
-    if (this._lastSessionId) {
-      const session = this.sessions.get(this._lastSessionId);
-      if (session) session.events.push(event);
+    if (!this._lastSessionId) {
+      // M8: programming error — start() was never called
+      throw new Error("recorder.start() must be called before record()");
     }
+    const session = this.sessions.get(this._lastSessionId);
+    if (session) session.events.push(event);
   }
 
   async end(sessionId: SessionId): Promise<Result<SessionRecord>> {
