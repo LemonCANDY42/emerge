@@ -2,30 +2,36 @@
  * hello-agent — demo using the mock provider.
  *
  * Task: "Summarize this short README and write the summary to NOTES.md".
- * Uses: fs.read, fs.write, read_handle tools; auto mode; mock provider.
+ * Uses: fs.read, fs.write tools; auto mode; mock provider.
+ *
+ * Reads examples/README.md (resolved relative to dist/ → ../../README.md).
+ * Writes examples/NOTES.md.
+ * Asserts NOTES.md exists and contains a non-error string after the run.
  */
 
+import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import type { AgentId, CorrelationId, ProviderEvent, SessionId } from "@emerge/kernel/contracts";
+import type { AgentId, ProviderEvent, SessionId } from "@emerge/kernel/contracts";
 import { Kernel } from "@emerge/kernel/runtime";
 import { BuiltinModeRegistry, permissionPolicyForMode } from "@emerge/modes";
 import { MockProvider } from "@emerge/provider-mock";
-import { InMemorySessionRecorder } from "@emerge/replay";
+import { makeRecorder } from "@emerge/replay";
 import { InProcSandbox } from "@emerge/sandbox-inproc";
 import { JsonlTelemetry } from "@emerge/telemetry-jsonl";
 import { makeFsReadTool, makeFsWriteTool } from "@emerge/tools";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
+// Path from dist/ → ../../README.md = examples/README.md (created at that path)
+const readmePath = path.join(__dirname, "../../README.md");
+// Write NOTES.md next to README.md in examples/
+const notesPath = path.join(__dirname, "../../NOTES.md");
+
 async function main() {
   const modeRegistry = new BuiltinModeRegistry();
   const policy = permissionPolicyForMode(modeRegistry, "auto");
   const sandbox = new InProcSandbox(policy);
-
-  // Script: read README → write NOTES.md → done
-  const readmeContent = `emerge is a next-generation agent harness.
-It is model-agnostic, multi-agent native, and self-aware.`;
 
   const script: { events: readonly ProviderEvent[] }[] = [
     {
@@ -40,7 +46,7 @@ It is model-agnostic, multi-agent native, and self-aware.`;
         {
           type: "tool_call_input_delta",
           toolCallId: "tc-1",
-          partial: JSON.stringify({ path: path.join(__dirname, "../../README.md") }),
+          partial: JSON.stringify({ path: readmePath }),
         },
         { type: "tool_call_end", toolCallId: "tc-1" },
         {
@@ -63,8 +69,9 @@ It is model-agnostic, multi-agent native, and self-aware.`;
           type: "tool_call_input_delta",
           toolCallId: "tc-2",
           partial: JSON.stringify({
-            path: path.join(__dirname, "../../NOTES.md"),
-            content: `# Summary\n\n${readmeContent}\n\nKey features: model-agnostic, multi-agent, self-aware.\n`,
+            path: notesPath,
+            content:
+              "# Summary\n\nemerge is a TypeScript agent harness.\n\nKey features: model-agnostic, multi-agent, self-aware.\n",
           }),
         },
         { type: "tool_call_end", toolCallId: "tc-2" },
@@ -92,7 +99,8 @@ It is model-agnostic, multi-agent native, and self-aware.`;
   ];
 
   const provider = new MockProvider(script);
-  const recorder = new InMemorySessionRecorder();
+  // makeRecorder auto-starts via setSession (M7); no manual recorder.start() needed
+  const recorder = makeRecorder();
   const telemetry = new JsonlTelemetry("./.emerge/hello-agent-telemetry.jsonl");
 
   const kernel = new Kernel(
@@ -113,9 +121,8 @@ It is model-agnostic, multi-agent native, and self-aware.`;
 
   const sessionId = `hello-${Date.now()}` as SessionId;
   const contractId = "hello-contract" as never;
+  // M7: setSession auto-starts the recorder; no separate recorder.start() call
   kernel.setSession(sessionId, contractId);
-
-  recorder.start(sessionId, contractId);
 
   // Register tools
   const registry = kernel.getToolRegistry();
@@ -187,10 +194,30 @@ It is model-agnostic, multi-agent native, and self-aware.`;
   console.log(`  Tokens out: ${snapshot.usage.tokensOut}`);
   console.log(`  USD: $${snapshot.usage.usd.toFixed(4)}`);
 
+  // C3: print grand total from CostMeter (wired in agent-runner now)
   const cost = kernel.getCostMeter().ledger();
   console.log(`\nCost ledger: $${cost.totals.grand.toFixed(4)} total`);
 
   telemetry.close();
+
+  // M6: assert NOTES.md exists and contains a non-error string
+  let notesOk = false;
+  try {
+    const notesContent = await fs.readFile(notesPath, "utf-8");
+    if (notesContent.length > 0 && !notesContent.toLowerCase().includes("error")) {
+      notesOk = true;
+      console.log(`\nNOTES.md written (${notesContent.length} bytes): OK`);
+    } else {
+      console.error(`\nNOTES.md content looks wrong: "${notesContent.slice(0, 100)}"`);
+    }
+  } catch (err) {
+    console.error(`\nNOTES.md not found at ${notesPath}:`, err);
+  }
+
+  if (!notesOk) {
+    console.error("ASSERTION FAILED: NOTES.md was not written correctly.");
+    process.exit(1);
+  }
 
   console.log("\n--- Task complete ---");
   console.log("To use Anthropic instead of mock:");

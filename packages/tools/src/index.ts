@@ -155,7 +155,8 @@ export function makeBashTool(sandbox: Sandbox): Tool {
       },
       permission: {
         rationale: "Execute shell commands",
-        effects: ["process_spawn", "fs_read", "fs_write"],
+        // M10: bash can run curl/wget/etc., so net_read and net_write are included.
+        effects: ["process_spawn", "fs_read", "fs_write", "net_read", "net_write"],
         defaultMode: "ask",
       },
     },
@@ -165,26 +166,27 @@ export function makeBashTool(sandbox: Sandbox): Tool {
         return { ok: false, error: { code: "E_INPUT", message: parsed.error.message } };
       }
       const { cmd, cwd, timeoutMs } = parsed.data;
-      const result = await sandbox.run(
-        { effect: "process_spawn", target: cmd.split(" ")[0] ?? "shell" },
-        async () => {
-          try {
-            const { stdout, stderr } = await execAsync(cmd, {
-              cwd,
-              timeout: timeoutMs ?? 30_000,
-              maxBuffer: 1024 * 1024,
-            });
-            return { stdout, stderr, code: 0 };
-          } catch (err: unknown) {
-            const e = err as { stdout?: string; stderr?: string; code?: number };
-            return {
-              stdout: e.stdout ?? "",
-              stderr: e.stderr ?? String(err),
-              code: e.code ?? 1,
-            };
-          }
-        },
-      );
+      // M11: pass the full cmd string as the sandbox target (not just the first
+      // token) so allowlist matchers can operate on the entire command string.
+      // InProcSandbox's allowlist semantics: match against the full command string.
+      // Users needing fine-grained allowlists should use regex matchers.
+      const result = await sandbox.run({ effect: "process_spawn", target: cmd }, async () => {
+        try {
+          const { stdout, stderr } = await execAsync(cmd, {
+            cwd,
+            timeout: timeoutMs ?? 30_000,
+            maxBuffer: 1024 * 1024,
+          });
+          return { stdout, stderr, code: 0 };
+        } catch (err: unknown) {
+          const e = err as { stdout?: string; stderr?: string; code?: number };
+          return {
+            stdout: e.stdout ?? "",
+            stderr: e.stderr ?? String(err),
+            code: e.code ?? 1,
+          };
+        }
+      });
       if (!result.ok) return result;
       const { stdout, stderr, code } = result.value;
       const preview = [

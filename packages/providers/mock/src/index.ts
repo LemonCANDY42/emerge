@@ -19,7 +19,8 @@ export interface MockScriptEntry {
 export class MockProvider implements Provider {
   readonly capabilities: ProviderCapabilities;
   private readonly script: readonly MockScriptEntry[];
-  private callIndex = 0;
+  /** Number of times invoke() has been called. Public for replay assertions. */
+  callIndex = 0;
 
   constructor(script: readonly MockScriptEntry[], id = "mock") {
     this.script = script;

@@ -1,13 +1,21 @@
 /**
  * InMemoryBus — keyed pub/sub with bounded buffers and drop-oldest back-pressure.
+ *
+ * C2: Enforces AgentCard.acl on send() for agent-addressed envelopes.
+ *     CardRegistry is populated by Kernel.spawn() / unregister on terminate.
+ *     Blocked sends return E_ACL_BLOCKED; a per-bus drop counter is exposed
+ *     via getDropStats() (for M4 observability).
  */
 
 import type {
+  AcceptScope,
+  AgentCard,
   AgentId,
   Bus,
   BusBackpressureConfig,
   BusEnvelope,
   CorrelationId,
+  KernelConfig,
   RequestEnvelope,
   Result,
   ResultEnvelope,
@@ -26,15 +34,104 @@ interface BufferedSubscription {
   closed: boolean;
 }
 
+/** Roles config is optional — used only for custodian-and-adjudicator-only ACL checks. */
+type RolesConfig = KernelConfig["roles"];
+
+function checkAclScope(
+  scope: AcceptScope,
+  from: AgentId,
+  receiverCard: AgentCard,
+  roles: RolesConfig,
+): boolean {
+  if (scope === "any") return true;
+  if (scope === "supervisor-only") {
+    return receiverCard.lineage.spawnedBy === from;
+  }
+  if (scope === "topology-peers") {
+    // M1 limitation: topology peer sets are not tracked in M1.
+    // Treat as "any" and log the limitation.
+    // TODO(M2): wire topology helper to register peer sets per agent.
+    return true;
+  }
+  if (scope === "custodian-and-adjudicator-only") {
+    return from === roles.custodian || from === roles.adjudicator;
+  }
+  // { allow: readonly AgentId[] }
+  return scope.allow.includes(from);
+}
+
+/**
+ * Map an envelope kind to the AgentCard.acl field that gates it.
+ * request/query → acceptsRequests
+ * signal        → acceptsSignals
+ * anything else → acceptsNotifications
+ */
+function aclScopeForKind(kind: BusEnvelope["kind"], card: AgentCard): AcceptScope {
+  switch (kind) {
+    case "request":
+    case "query":
+      return card.acl.acceptsRequests;
+    case "signal":
+      return card.acl.acceptsSignals;
+    default:
+      return card.acl.acceptsNotifications;
+  }
+}
+
+export interface BusDropStats {
+  readonly aclBlocked: number;
+}
+
 export class InMemoryBus implements Bus {
   private readonly subs: Set<BufferedSubscription> = new Set();
   private readonly config: BusBackpressureConfig;
+  /** C2: registered agent cards for ACL enforcement. */
+  private readonly cardRegistry = new Map<AgentId, AgentCard>();
+  private readonly roles: RolesConfig;
+  private dropStats = { aclBlocked: 0 };
 
-  constructor(config: BusBackpressureConfig = { bufferSize: 256 }) {
+  constructor(config: BusBackpressureConfig = { bufferSize: 256 }, roles: RolesConfig = {}) {
     this.config = config;
+    this.roles = roles;
+  }
+
+  /** C2: Register an agent card so send() can enforce its ACL. */
+  registerCard(card: AgentCard): void {
+    this.cardRegistry.set(card.id, card);
+  }
+
+  /** C2: Unregister on terminate. */
+  unregisterCard(id: AgentId): void {
+    this.cardRegistry.delete(id);
+  }
+
+  /** Exposed for observability (M4 deferred). */
+  getDropStats(): BusDropStats {
+    return { ...this.dropStats };
   }
 
   async send(env: BusEnvelope): Promise<Result<void>> {
+    // C2: ACL check for agent-addressed envelopes only.
+    // Broadcast/topic messages skip per-agent ACL (no single receiver).
+    if (env.to.kind === "agent") {
+      const receiverCard = this.cardRegistry.get(env.to.id);
+      if (receiverCard) {
+        const scope = aclScopeForKind(env.kind, receiverCard);
+        const allowed = checkAclScope(scope, env.from, receiverCard, this.roles);
+        if (!allowed) {
+          this.dropStats = { aclBlocked: this.dropStats.aclBlocked + 1 };
+          return {
+            ok: false,
+            error: {
+              code: "E_ACL_BLOCKED",
+              message: `agent ${String(env.from)} is not permitted to send '${env.kind}' to ${String(env.to.id)} (ACL: ${JSON.stringify(scope)})`,
+              retriable: false,
+            },
+          };
+        }
+      }
+    }
+
     this.fanOut(env);
     return { ok: true, value: undefined };
   }

@@ -131,6 +131,8 @@ export class AnthropicProvider implements Provider {
       if (req.temperature !== undefined) streamParams.temperature = req.temperature;
       if (req.stopSequences) streamParams.stop_sequences = [...req.stopSequences];
 
+      // M9: capture wall time around the actual API call
+      const startMs = Date.now();
       const stream = await this.client.messages.create(streamParams);
 
       let inputTokens = 0;
@@ -188,7 +190,7 @@ export class AnthropicProvider implements Provider {
         usage: {
           tokensIn: inputTokens,
           tokensOut: outputTokens,
-          wallMs: 0,
+          wallMs: Date.now() - startMs,
           toolCalls: toolCallIdToName.size,
           usd,
         },

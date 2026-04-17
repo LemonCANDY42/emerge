@@ -2,6 +2,7 @@
  * AgentRunner — implements AgentHandle and the perceive→decide→act→observe loop.
  */
 
+import { createHash } from "node:crypto";
 import type {
   AgentCard,
   AgentHandle,
@@ -9,10 +10,13 @@ import type {
   AgentSnapshot,
   AgentSpec,
   AgentState,
+  ArtifactHandle,
   Bus,
   BusEnvelope,
   ContractError,
+  ContractId,
   CorrelationId,
+  CostMeter,
   Memory,
   MemoryItem,
   Provider,
@@ -43,8 +47,10 @@ export interface AgentRunnerDeps {
   scheduler: Scheduler;
   sessionId: SessionId;
   correlationId: CorrelationId;
+  contractId?: ContractId | undefined;
   telemetry?: Telemetry | undefined;
   recorder?: SessionRecorder | undefined;
+  costMeter?: CostMeter | undefined;
 }
 
 function makeCard(spec: AgentSpec, provider: Provider): AgentCard {
@@ -75,6 +81,9 @@ export class AgentRunner implements AgentHandle {
   private _state: AgentState = "idle";
   private readonly snapshotListeners: Array<(s: AgentSnapshot) => void> = [];
   private _lastActivityAt = Date.now();
+  // In-memory artifact store for to_handle projections
+  private readonly artifactStore = new Map<ArtifactHandle, string>();
+  private artifactCounter = 0;
 
   constructor(deps: AgentRunnerDeps) {
     this.deps = deps;
@@ -111,6 +120,8 @@ export class AgentRunner implements AgentHandle {
   async run(): Promise<void> {
     const { spec, scheduler, sessionId, correlationId, bus } = this.deps;
     const schedState = scheduler.register(spec.id, spec.termination);
+    // Track which projection kinds have already emitted their one-time warn.
+    const warnedProjections = new Set<string>();
 
     this.setState("thinking");
 
@@ -134,6 +145,9 @@ export class AgentRunner implements AgentHandle {
 
     // Resolve available tools
     const tools = this.deps.toolRegistry.resolve(spec.toolsAllowed);
+
+    // M2: monotonic delta seq per request — reset for each provider call
+    let deltaSeq = 0;
 
     while (true) {
       const stepResult = scheduler.preStep(schedState, sessionId, correlationId);
@@ -171,9 +185,8 @@ export class AgentRunner implements AgentHandle {
         signal: schedState.abortController.signal,
       };
 
-      if (this.deps.recorder) {
-        // record the start of a provider call (events recorded after)
-      }
+      // M2: reset delta seq at start of each provider call
+      deltaSeq = 0;
 
       const callStart = Date.now();
       let textAccumulator = "";
@@ -195,7 +208,7 @@ export class AgentRunner implements AgentHandle {
 
         if (event.type === "text_delta") {
           textAccumulator += event.text;
-          // emit delta to subscribers
+          // M2: increment seq monotonically per correlationId
           await bus.send({
             kind: "delta",
             correlationId,
@@ -204,7 +217,7 @@ export class AgentRunner implements AgentHandle {
             to: { kind: "broadcast" },
             timestamp: Date.now(),
             chunk: event.text,
-            seq: schedState.iteration,
+            seq: deltaSeq++,
           });
         } else if (event.type === "tool_call_start") {
           pendingToolCalls.set(event.toolCallId, { name: event.name, inputJson: "" });
@@ -228,6 +241,24 @@ export class AgentRunner implements AgentHandle {
           at: callStart,
           req,
           events: recordedEvents,
+        });
+      }
+
+      // M1: fingerprint the provider call for cycle detection
+      const promptHash = createHash("sha256").update(JSON.stringify(req.messages)).digest("hex");
+      schedState.cycleGuard.recordProviderCall(
+        this.id,
+        this.deps.provider.capabilities.id,
+        promptHash,
+      );
+
+      // C3: record provider cost in the cost meter
+      if (this.deps.costMeter && stopUsage.usd > 0) {
+        this.deps.costMeter.record({
+          agent: this.id,
+          ...(this.deps.contractId !== undefined ? { contract: this.deps.contractId } : {}),
+          category: "provider",
+          usd: stopUsage.usd,
         });
       }
 
@@ -384,10 +415,28 @@ export class AgentRunner implements AgentHandle {
             });
           }
 
+          // C3: record tool cost if reported in meta
+          if (this.deps.costMeter && result.meta) {
+            // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature requires bracket notation here
+            const toolUsd = result.meta["usd"];
+            if (typeof toolUsd === "number" && toolUsd > 0) {
+              this.deps.costMeter.record({
+                agent: this.id,
+                ...(this.deps.contractId !== undefined ? { contract: this.deps.contractId } : {}),
+                category: "tool",
+                usd: toolUsd,
+              });
+            }
+          }
+
           completedToolCalls.push({ toolCallId, name: tc.name, input: parsed, result });
 
-          // Apply projections if declared
+          // C5: Apply projections if declared
           let preview = result.preview;
+          const projectionsApplied: string[] = [];
+          let projectionsSkipped: string[] | undefined;
+          let artifactHandle: string | undefined;
+
           if (spec.projections) {
             for (const proj of spec.projections) {
               if (proj.tool === tc.name || proj.tool === "*") {
@@ -398,12 +447,49 @@ export class AgentRunner implements AgentHandle {
                         preview.slice(0, step.maxBytes) +
                         (step.truncationMessage ?? "...[truncated]");
                     }
+                    projectionsApplied.push("cap");
+                  } else if (step.kind === "redact") {
+                    // C5: redact — regex replace pattern with replacement
+                    const re = new RegExp(step.pattern, "g");
+                    preview = preview.replace(re, step.replacement);
+                    projectionsApplied.push("redact");
+                  } else if (step.kind === "to_handle") {
+                    // C5: externalize full preview as artifact if over threshold
+                    if (preview.length > step.overBytes) {
+                      const handle =
+                        `artifact-${this.id}-${++this.artifactCounter}` as ArtifactHandle;
+                      this.artifactStore.set(handle, preview);
+                      artifactHandle = handle;
+                      preview = preview.slice(0, step.overBytes);
+                      projectionsApplied.push("to_handle");
+                    }
+                  } else if (step.kind === "summarize" || step.kind === "project") {
+                    // C5: warn once per session per kind, then skip
+                    if (!warnedProjections.has(step.kind)) {
+                      warnedProjections.add(step.kind);
+                      console.warn(
+                        `[emerge] projection step '${step.kind}' is not implemented in M1; skipping`,
+                      );
+                    }
+                    projectionsSkipped = projectionsSkipped ?? [];
+                    projectionsSkipped.push(step.kind);
                   }
-                  // other projection kinds stubbed for M1
                 }
               }
             }
           }
+
+          // Build projected result with meta
+          const projectedResult: ToolResult = {
+            ...result,
+            preview,
+            ...(artifactHandle !== undefined ? { handle: artifactHandle } : {}),
+            meta: {
+              ...result.meta,
+              ...(projectionsApplied.length > 0 ? { projectionsApplied } : {}),
+              ...(projectionsSkipped !== undefined ? { projectionsSkipped } : {}),
+            },
+          };
 
           toolResultContents.push({
             type: "tool_result",
@@ -415,7 +501,7 @@ export class AgentRunner implements AgentHandle {
             this.id,
             tc.name,
             JSON.stringify(parsed),
-            result.preview.slice(0, 64),
+            projectedResult.preview.slice(0, 64),
           );
 
           scheduler.recordUsage(schedState, {

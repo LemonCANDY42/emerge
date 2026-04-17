@@ -39,6 +39,7 @@ import type {
   WorkspaceManager,
 } from "../contracts/index.js";
 import type { Surveillance } from "../contracts/surveillance.js";
+import type { TerminationPolicy } from "../contracts/termination.js";
 import { AgentRunner } from "./agent-runner.js";
 import { InMemoryBus } from "./bus.js";
 import { InMemoryCostMeter } from "./cost-meter.js";
@@ -57,6 +58,30 @@ export interface KernelDeps {
   memory?: Memory | undefined;
   sandbox?: Sandbox | undefined;
   surveillance?: Surveillance | undefined;
+  /**
+   * Used when reproducibility === "record-replay".
+   *
+   * The kernel cannot depend on @emerge/replay (circular dep).  Instead the
+   * caller passes a pre-constructed SessionRecord that the kernel uses to
+   * build a Provider wrapper via `replayProviderFactory`.  If only
+   * `replayRecord` is provided and no `replayProviderFactory`, the kernel
+   * returns E_NO_REPLAY_RECORD when a provider call would be made.
+   *
+   * Typical usage (from examples/replay-smoke):
+   *
+   *   import { RecordedProvider } from "@emerge/replay";
+   *   deps.replayRecord = record;
+   *   deps.replayProviderFactory = (rec, caps) => new RecordedProvider(rec, caps);
+   */
+  replayRecord?: SessionRecord | undefined;
+  /**
+   * Factory that wraps a SessionRecord + original ProviderCapabilities into a
+   * replay-faithful Provider.  Supplied by the caller so the kernel stays
+   * free of @emerge/replay as a runtime dependency.
+   */
+  replayProviderFactory?:
+    | ((record: SessionRecord, originalProvider: Provider) => Provider)
+    | undefined;
 }
 
 // Simple in-memory tool registry
@@ -137,6 +162,55 @@ class NoopSandbox implements Sandbox {
   }
 }
 
+function validateTerminationPolicy(p: TerminationPolicy): Result<void> {
+  if (p.maxIterations < 1) {
+    return {
+      ok: false,
+      error: {
+        code: "E_INVALID_TERMINATION",
+        message: `maxIterations must be >= 1, got ${p.maxIterations}`,
+      },
+    };
+  }
+  if (p.maxWallMs < 1) {
+    return {
+      ok: false,
+      error: {
+        code: "E_INVALID_TERMINATION",
+        message: `maxWallMs must be >= 1, got ${p.maxWallMs}`,
+      },
+    };
+  }
+  if (p.cycle.windowSize < 1) {
+    return {
+      ok: false,
+      error: {
+        code: "E_INVALID_TERMINATION",
+        message: `cycle.windowSize must be >= 1, got ${p.cycle.windowSize}`,
+      },
+    };
+  }
+  if (p.cycle.repeatThreshold < 1) {
+    return {
+      ok: false,
+      error: {
+        code: "E_INVALID_TERMINATION",
+        message: `cycle.repeatThreshold must be >= 1, got ${p.cycle.repeatThreshold}`,
+      },
+    };
+  }
+  if (p.retry.transient < 0) {
+    return {
+      ok: false,
+      error: {
+        code: "E_INVALID_TERMINATION",
+        message: `retry.transient must be >= 0, got ${p.retry.transient}`,
+      },
+    };
+  }
+  return { ok: true, value: undefined };
+}
+
 export class Kernel {
   private readonly config: KernelConfig;
   private readonly bus: Bus;
@@ -144,8 +218,9 @@ export class Kernel {
   private readonly lineageGuard: LineageGuard;
   private readonly costMeter: CostMeter;
   private readonly toolRegistry: ToolRegistry;
-  private readonly memory: Memory;
-  private readonly sandbox: Sandbox;
+  private memory: Memory;
+  private sandbox: Sandbox;
+  private surveillance: Surveillance | undefined;
   private readonly deps: KernelDeps;
   private readonly providers = new Map<string, Provider>();
   private sessionId: SessionId = `sess-${Date.now()}` as SessionId;
@@ -153,40 +228,55 @@ export class Kernel {
   private readonly handles = new Map<AgentId, AgentHandle>();
 
   constructor(config: KernelConfig, deps: KernelDeps = {}) {
+    if (config.lineage.maxDepth < 1) {
+      throw new Error(`LineageGuardConfig.maxDepth must be >= 1, got ${config.lineage.maxDepth}`);
+    }
     this.config = config;
     this.deps = deps;
-    this.bus = deps.bus ?? new InMemoryBus(config.bus);
+    this.bus = deps.bus ?? new InMemoryBus(config.bus, config.roles);
     this.scheduler = new Scheduler(this.bus);
     this.lineageGuard = deps.lineageGuard ?? new InMemoryLineageGuard(config.lineage);
     this.costMeter = deps.costMeter ?? new InMemoryCostMeter();
     this.toolRegistry = deps.toolRegistry ?? new SimpleToolRegistry();
     this.memory = deps.memory ?? new SimpleMemory();
     this.sandbox = deps.sandbox ?? new NoopSandbox();
+    this.surveillance = deps.surveillance;
   }
 
   mountProvider(provider: Provider): void {
     this.providers.set(provider.capabilities.id, provider);
   }
 
-  mountSurveillance(_s: Surveillance): void {
-    // stored for future use
+  mountSurveillance(s: Surveillance): void {
+    // surveillance is wired; assess()/observe() are not yet called from the
+    // loop (deferred to M2).
+    this.surveillance = s;
   }
 
   mountSandbox(s: Sandbox): void {
-    // if explicitly mounted, override; for now stored in deps
-    void s;
+    this.sandbox = s;
   }
 
   mountMemory(m: Memory): void {
-    void m;
+    this.memory = m;
   }
 
+  /**
+   * Set the active session + contract, and auto-start the recorder if one is
+   * attached.  Callers no longer need to call recorder.start() separately.
+   */
   setSession(sessionId: SessionId, contractId: ContractId): void {
     this.sessionId = sessionId;
     this.contractId = contractId;
+    // M7: auto-start the recorder so callers don't have to
+    this.deps.recorder?.start(sessionId, contractId);
   }
 
   async spawn(spec: AgentSpec): Promise<Result<AgentHandle>> {
+    // C4: validate TerminationPolicy
+    const policyCheck = validateTerminationPolicy(spec.termination);
+    if (!policyCheck.ok) return policyCheck;
+
     // Lineage check
     if (spec.lineage.spawnedBy) {
       const canResult = this.lineageGuard.canSpawn(spec.lineage.spawnedBy, spec.id);
@@ -201,12 +291,40 @@ export class Kernel {
       return { ok: false, error: { code: "E_NO_PROVIDER", message: "no provider available" } };
     }
 
-    const provider = this.providers.get(providerId);
-    if (!provider) {
+    const rawProvider = this.providers.get(providerId);
+    if (!rawProvider) {
       return {
         ok: false,
         error: { code: "E_PROVIDER_NOT_FOUND", message: `provider ${providerId} not found` },
       };
+    }
+
+    // C1: record-replay tier — substitute RecordedProvider (via factory to avoid circular dep)
+    let provider: Provider = rawProvider;
+    if (this.config.reproducibility === "record-replay") {
+      const record = this.deps.replayRecord;
+      if (!record) {
+        return {
+          ok: false,
+          error: {
+            code: "E_NO_REPLAY_RECORD",
+            message:
+              "reproducibility is 'record-replay' but no replayRecord was provided in KernelDeps",
+          },
+        };
+      }
+      const factory = this.deps.replayProviderFactory;
+      if (!factory) {
+        return {
+          ok: false,
+          error: {
+            code: "E_NO_REPLAY_RECORD",
+            message:
+              "reproducibility is 'record-replay' but no replayProviderFactory was provided in KernelDeps",
+          },
+        };
+      }
+      provider = factory(record, rawProvider);
     }
 
     // Record lineage
@@ -221,24 +339,28 @@ export class Kernel {
 
     const correlationId = `agent-${spec.id}-${Date.now()}` as CorrelationId;
 
-    const sandbox = this.deps.sandbox ?? this.sandbox;
-    const memory = this.deps.memory ?? this.memory;
-
     const runner = new AgentRunner({
       spec,
       provider,
       toolRegistry: this.toolRegistry,
-      sandbox,
-      memory,
+      sandbox: this.sandbox,
+      memory: this.memory,
       bus: this.bus,
       scheduler: this.scheduler,
       sessionId: this.sessionId,
       correlationId,
+      contractId: this.contractId,
       telemetry: this.deps.telemetry,
       recorder: this.deps.recorder,
+      costMeter: this.costMeter,
     });
 
     this.handles.set(spec.id, runner);
+
+    // C2: register the agent's card in the bus so ACL can be enforced
+    if (this.bus instanceof InMemoryBus) {
+      this.bus.registerCard(runner.card());
+    }
 
     // Perform handshake
     await this.bus.send({

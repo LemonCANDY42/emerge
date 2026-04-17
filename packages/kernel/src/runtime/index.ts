@@ -1,4 +1,5 @@
 export { InMemoryBus } from "./bus.js";
+export type { BusDropStats } from "./bus.js";
 export { CycleGuard } from "./cycle-guard.js";
 export { InMemoryCostMeter } from "./cost-meter.js";
 export { InMemoryLineageGuard } from "./lineage-guard.js";

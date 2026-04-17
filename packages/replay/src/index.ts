@@ -4,6 +4,11 @@
 
 import type {
   ContractId,
+  Provider,
+  ProviderCapabilities,
+  ProviderEvent,
+  ProviderMessage,
+  ProviderRequest,
   RecordedEvent,
   ReplayCursor,
   Replayer,
@@ -101,6 +106,54 @@ export class InMemoryReplayer implements Replayer {
         event,
       },
     };
+  }
+}
+
+/**
+ * RecordedProvider — wraps a SessionRecord and yields recorded provider_call
+ * events in order, without ever prompting the real model.
+ *
+ * Conforms to the Provider contract. Throws E_REPLAY_EXHAUSTED when a fresh
+ * invoke() arrives but all recorded provider_call events have been consumed.
+ *
+ * Use this when KernelConfig.reproducibility === "record-replay".
+ */
+export class RecordedProvider implements Provider {
+  readonly capabilities: ProviderCapabilities;
+  private readonly providerCalls: Array<readonly ProviderEvent[]>;
+  private callIndex = 0;
+
+  constructor(record: SessionRecord, originalCapabilities: ProviderCapabilities) {
+    this.capabilities = originalCapabilities;
+    // Extract provider_call events in recording order
+    this.providerCalls = record.events
+      .filter(
+        (e): e is Extract<RecordedEvent, { kind: "provider_call" }> => e.kind === "provider_call",
+      )
+      .map((e) => e.events);
+  }
+
+  async *invoke(_req: ProviderRequest): AsyncIterable<ProviderEvent> {
+    const recorded = this.providerCalls[this.callIndex];
+    if (recorded === undefined) {
+      yield {
+        type: "error",
+        error: {
+          code: "E_REPLAY_EXHAUSTED",
+          message: `replay exhausted after ${this.callIndex} provider calls`,
+          retriable: false,
+        },
+      };
+      return;
+    }
+    this.callIndex++;
+    for (const event of recorded) {
+      yield event;
+    }
+  }
+
+  async countTokens(_messages: readonly ProviderMessage[]): Promise<Result<number>> {
+    return { ok: true, value: 0 };
   }
 }
 
