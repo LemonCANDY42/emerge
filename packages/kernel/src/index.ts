@@ -1,8 +1,8 @@
 /**
  * @emerge/kernel
  *
- * The kernel ships its contracts here as the primary export. The runtime
- * (loop, scheduler, bus, lifecycle) lands in subsequent milestones.
+ * Contracts (public API) plus runtime (implementation).
  */
 
 export * as contracts from "./contracts/index.js";
+export * as runtime from "./runtime/index.js";

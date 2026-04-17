@@ -1,0 +1,20 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "dist",
+    "composite": true,
+    "tsBuildInfoFile": "dist/.tsbuildinfo",
+    "types": ["node"]
+  },
+  "include": ["src/**/*"],
+  "references": [
+    { "path": "../../packages/kernel" },
+    { "path": "../../packages/providers/mock" },
+    { "path": "../../packages/sandbox-inproc" },
+    { "path": "../../packages/tools" },
+    { "path": "../../packages/telemetry-jsonl" },
+    { "path": "../../packages/modes" },
+    { "path": "../../packages/replay" }
+  ]
+}

@@ -36,6 +36,10 @@ coverage/
 *.sqlite
 *.sqlite-journal
 
+# demo output
+examples/NOTES.md
+examples/**/.emerge/
+
 # misc
 .cache/
 .turbo/

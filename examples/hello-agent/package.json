@@ -1,0 +1,25 @@
+{
+  "name": "@emerge/example-hello-agent",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "scripts": {
+    "build": "tsc -b",
+    "typecheck": "tsc -b",
+    "clean": "rm -rf dist *.tsbuildinfo",
+    "start": "node dist/index.js"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0"
+  },
+  "dependencies": {
+    "@emerge/kernel": "workspace:*",
+    "@emerge/provider-mock": "workspace:*",
+    "@emerge/sandbox-inproc": "workspace:*",
+    "@emerge/tools": "workspace:*",
+    "@emerge/telemetry-jsonl": "workspace:*",
+    "@emerge/modes": "workspace:*",
+    "@emerge/replay": "workspace:*"
+  }
+}
