@@ -2,7 +2,9 @@
  * Kernel — the top-level facade. Constructor takes KernelConfig + optional modules.
  */
 
+import type { Verdict } from "../contracts/adjudicator.js";
 import type { CostMeter } from "../contracts/cost.js";
+import type { Custodian } from "../contracts/custodian.js";
 import type { ExperienceLibrary } from "../contracts/experience.js";
 import type {
   AgentHandle,
@@ -45,6 +47,7 @@ import { AgentRunner } from "./agent-runner.js";
 import { InMemoryBus } from "./bus.js";
 import { InMemoryCostMeter } from "./cost-meter.js";
 import { InMemoryLineageGuard } from "./lineage-guard.js";
+import { QuotaRouter } from "./quota-router.js";
 import { Scheduler } from "./scheduler.js";
 
 export interface KernelDeps {
@@ -129,12 +132,16 @@ class SimpleMemory implements Memory {
     scope: RecallScope,
     budget: RecallBudget,
   ): Promise<Result<RecallResult>> {
-    // M12: honour scope.agents and query.attributes filters
-    let filtered = this.items;
+    // F: Separate pinned items — they are ALWAYS included regardless of budget.
+    // Future compressors MUST NOT drop items with `pin` set.
+    const pinnedItems = this.items.filter((item) => item.pin !== undefined);
+    let nonPinned = this.items.filter((item) => item.pin === undefined);
 
+    // M12: honour scope.agents and query.attributes filters (applied to non-pinned only;
+    // pinned items survive scope filtering by design — ADR 0016)
     if (scope.agents && scope.agents.length > 0) {
       const agentSet = new Set<string>(scope.agents);
-      filtered = filtered.filter((item) => {
+      nonPinned = nonPinned.filter((item) => {
         // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature requires bracket notation here
         const itemAgent = item.attributes["agent"];
         return itemAgent !== undefined && agentSet.has(String(itemAgent));
@@ -142,18 +149,36 @@ class SimpleMemory implements Memory {
     }
 
     if (query.attributes && Object.keys(query.attributes).length > 0) {
-      filtered = filtered.filter((item) =>
+      nonPinned = nonPinned.filter((item) =>
         Object.entries(query.attributes ?? {}).every(([k, v]) => item.attributes[k] === v),
       );
     }
 
-    const maxItems = budget.maxItems ?? filtered.length;
-    const items = filtered.slice(-maxItems);
+    const maxItems = budget.maxItems ?? nonPinned.length;
+    const selectedNonPinned = nonPinned.slice(-maxItems);
+    const droppedForBudget = Math.max(0, nonPinned.length - maxItems);
+
+    // Pinned items are always first; non-pinned follow
+    const items = [...pinnedItems, ...selectedNonPinned];
+
+    // Build trace entries for pinned items
+    const traceItems = pinnedItems.map((item) => ({
+      itemId: item.id,
+      score: 1.0,
+      components: {} as Readonly<{
+        semantic?: number;
+        structural?: number;
+        temporal?: number;
+        causal?: number;
+      }>,
+      reason: `pinned:${item.pin ?? "unknown"}`,
+    }));
+
     return {
       ok: true,
       value: {
         items,
-        trace: { items: [], droppedForBudget: Math.max(0, filtered.length - maxItems) },
+        trace: { items: traceItems, droppedForBudget },
       },
     };
   }
@@ -241,11 +266,23 @@ export class Kernel {
   private sandbox: Sandbox;
   private surveillance: Surveillance | undefined;
   private experienceLibrary: ExperienceLibrary | undefined;
+  /** D: mounted in-process Custodian for quota auto-routing. */
+  private custodian: Custodian | undefined;
+  /** D: quota router subscription cleanup — active when custodian is mounted. */
+  private quotaRouterCleanup: (() => void) | undefined;
   private readonly deps: KernelDeps;
   private readonly providers = new Map<string, Provider>();
   private sessionId: SessionId = `sess-${Date.now()}` as SessionId;
   private contractId: ContractId = "contract-default" as ContractId;
   private readonly handles = new Map<AgentId, AgentHandle>();
+  /**
+   * C1: Track the latest verdict per session from the configured adjudicator.
+   * Only used when trustMode !== "implicit".
+   */
+  private _latestVerdict: Verdict | undefined = undefined;
+  private _verdictSubscriptionCleanup: (() => void) | undefined = undefined;
+  /** C1: One-time warn flag — emitted when no adjudicator is configured. */
+  private _warnedNoAdjudicator = false;
 
   constructor(config: KernelConfig, deps: KernelDeps = {}) {
     if (config.lineage.maxDepth < 1) {
@@ -290,14 +327,130 @@ export class Kernel {
   }
 
   /**
+   * D: Register an in-process Custodian for quota auto-routing.
+   * When a `quota.request` envelope is sent on the bus to the configured
+   * custodian id, the kernel intercepts it, calls custodian.receiveQuotaRequest(),
+   * and replies with the appropriate quota.grant/deny/partial envelope.
+   *
+   * KernelConfig.roles.custodian must be set to the custodian's AgentId for
+   * this to be effective.
+   */
+  mountCustodian(custodian: Custodian): void {
+    this.custodian = custodian;
+    this.startQuotaAutoRouter();
+  }
+
+  private startQuotaAutoRouter(): void {
+    const custodianId = this.config.roles.custodian;
+    if (!custodianId || !this.custodian) return;
+
+    // Clean up previous subscription if any
+    this.quotaRouterCleanup?.();
+
+    const custodian = this.custodian;
+    const bus = this.bus;
+    const sessionId = this.sessionId;
+    let active = true;
+
+    // Subscribe as custodian to receive quota.request envelopes addressed to it
+    const sub = bus.subscribe(custodianId, { kind: "self" });
+
+    void (async () => {
+      for await (const env of sub.events) {
+        if (!active) break;
+        if (env.kind !== "quota.request") continue;
+
+        const req = env.request;
+        const decision = await custodian.receiveQuotaRequest(req);
+
+        const decisionKind: "quota.grant" | "quota.deny" | "quota.partial" =
+          decision.kind === "grant"
+            ? "quota.grant"
+            : decision.kind === "deny"
+              ? "quota.deny"
+              : "quota.partial";
+
+        await bus.send({
+          kind: decisionKind,
+          correlationId: env.correlationId,
+          sessionId,
+          from: custodianId,
+          to: { kind: "agent", id: env.from },
+          timestamp: Date.now(),
+          decision,
+        });
+      }
+    })();
+
+    this.quotaRouterCleanup = () => {
+      active = false;
+      sub.close();
+    };
+  }
+
+  /**
+   * D: Create a QuotaRouter pre-wired to this kernel's custodian.
+   * Returns undefined if no custodian is configured.
+   */
+  getQuotaRouter(): QuotaRouter | undefined {
+    const custodianId = this.config.roles.custodian;
+    if (!custodianId) return undefined;
+    return new QuotaRouter(this.bus, custodianId);
+  }
+
+  /**
    * Set the active session + contract, and auto-start the recorder if one is
    * attached.  Callers no longer need to call recorder.start() separately.
    */
   setSession(sessionId: SessionId, contractId: ContractId): void {
     this.sessionId = sessionId;
     this.contractId = contractId;
+    // Reset verdict tracking for the new session
+    this._latestVerdict = undefined;
     // M7: auto-start the recorder so callers don't have to
     this.deps.recorder?.start(sessionId, contractId);
+    // D: restart quota auto-router with the new sessionId if custodian is mounted
+    if (this.custodian) {
+      this.startQuotaAutoRouter();
+    }
+    // C1: start adjudicator verdict subscription
+    this.startVerdictSubscription();
+  }
+
+  /**
+   * C1: Subscribe to verdict envelopes from the configured adjudicator.
+   * Tracks the latest verdict per session for endSession() enforcement.
+   */
+  private startVerdictSubscription(): void {
+    // Clean up previous subscription
+    this._verdictSubscriptionCleanup?.();
+    this._verdictSubscriptionCleanup = undefined;
+
+    const adjudicatorId = this.config.roles.adjudicator;
+    if (!adjudicatorId) return;
+
+    const bus = this.bus;
+    let active = true;
+
+    // Subscribe as kernel observer to verdict envelopes from the adjudicator
+    const sub = bus.subscribe("kernel" as AgentId, {
+      kind: "from",
+      sender: adjudicatorId,
+      kinds: ["verdict"],
+    });
+
+    void (async () => {
+      for await (const env of sub.events) {
+        if (!active) break;
+        if (env.kind !== "verdict") continue;
+        this._latestVerdict = env.verdict;
+      }
+    })();
+
+    this._verdictSubscriptionCleanup = () => {
+      active = false;
+      sub.close();
+    };
   }
 
   async spawn(spec: AgentSpec): Promise<Result<AgentHandle>> {
@@ -403,6 +556,8 @@ export class Kernel {
     // C2: register the agent's card in the bus so ACL can be enforced
     if (this.bus instanceof InMemoryBus) {
       this.bus.registerCard(runner.card());
+      // Mn5: unregister the card when the agent emits a terminal result envelope
+      this.watchForTerminalResult(spec.id);
     }
 
     // Perform handshake
@@ -440,6 +595,29 @@ export class Kernel {
     return { ok: true, value: runner };
   }
 
+  /**
+   * Mn5: Subscribe to a single agent's result envelope and unregister its card
+   * when the terminal result arrives. Belt-and-braces alongside endSession.
+   */
+  private watchForTerminalResult(agentId: AgentId): void {
+    const bus = this.bus;
+    if (!(bus instanceof InMemoryBus)) return;
+    const sub = bus.subscribe("kernel" as AgentId, {
+      kind: "from",
+      sender: agentId,
+      kinds: ["result"],
+    });
+    void (async () => {
+      for await (const env of sub.events) {
+        if (env.kind === "result") {
+          bus.unregisterCard(agentId);
+          sub.close();
+          break;
+        }
+      }
+    })();
+  }
+
   async dispatch(envelope: BusEnvelope): Promise<Result<void>> {
     return this.bus.send(envelope);
   }
@@ -451,6 +629,36 @@ export class Kernel {
   }
 
   async endSession(): Promise<Result<SessionRecord | undefined>> {
+    // C1: Enforce adjudicator verdict gate unless trustMode is "implicit".
+    const trustMode = this.config.trustMode ?? "explicit";
+    const adjudicatorId = this.config.roles.adjudicator;
+
+    if (trustMode !== "implicit") {
+      if (!adjudicatorId) {
+        // No adjudicator configured — trust is implied, but warn once.
+        if (!this._warnedNoAdjudicator) {
+          this._warnedNoAdjudicator = true;
+          console.warn(
+            "[emerge/kernel] endSession: no adjudicator configured — session will complete without verdict gating. Set config.roles.adjudicator to enforce ADR 0012.",
+          );
+        }
+      } else if (this._latestVerdict?.kind !== "aligned") {
+        // Adjudicator is configured but hasn't issued an aligned verdict.
+        this._verdictSubscriptionCleanup?.();
+        return {
+          ok: false,
+          error: {
+            code: "E_NO_ALIGNED_VERDICT",
+            message: `Session cannot be marked completed: adjudicator has not issued an 'aligned' verdict (latest: ${this._latestVerdict?.kind ?? "none"}). Emit an 'aligned' verdict from the adjudicator before ending the session, or set config.trustMode: "implicit" to bypass.`,
+          },
+        };
+      }
+    }
+
+    // Clean up verdict subscription
+    this._verdictSubscriptionCleanup?.();
+    this._verdictSubscriptionCleanup = undefined;
+
     if (this.deps.recorder) {
       return this.deps.recorder.end(this.sessionId);
     }
@@ -459,6 +667,11 @@ export class Kernel {
 
   getBus(): Bus {
     return this.bus;
+  }
+
+  /** C2: Expose shared kernel Memory so callers (e.g. Custodian) can write into it. */
+  getMemory(): Memory {
+    return this.memory;
   }
 
   getToolRegistry(): ToolRegistry {

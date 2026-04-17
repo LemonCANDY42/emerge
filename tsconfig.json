@@ -15,6 +15,10 @@
     { "path": "./examples/hello-agent" },
     { "path": "./examples/replay-smoke" },
     { "path": "./examples/weak-model-decomposition" },
-    { "path": "./examples/cycle-guard-trip" }
+    { "path": "./examples/cycle-guard-trip" },
+    { "path": "./packages/artifacts-local-fs" },
+    { "path": "./packages/workspaces-git-worktree" },
+    { "path": "./packages/agents" },
+    { "path": "./examples/topology-supervisor-worker" }
   ]
 }

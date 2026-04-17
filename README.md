@@ -75,21 +75,24 @@ for the how.
 
 | Module | Purpose | State |
 |---|---|---|
-| `@emerge/kernel` | Contracts, scheduler, message bus, lifecycle, guards | drafting |
-| `@emerge/providers/*` | Model adapters (Anthropic, OpenAI, Gemini, OpenAI-compat) | planned (M1+) |
-| `@emerge/agents` | Topology helpers + Custodian/Adjudicator/Postmortem roles | planned (M3) |
+| `@emerge/kernel` | Contracts, scheduler, message bus, lifecycle, guards | shipped (M0–M3a) |
+| `@emerge/providers/mock` | Scripted mock provider for testing/demos | shipped (M1) |
+| `@emerge/providers/anthropic` | Anthropic Claude adapter | shipped (M1) |
+| `@emerge/agents` | Topology helpers (supervisor/pool/pipeline) + Custodian/Adjudicator role helpers (Postmortem helper present, kernel auto-invoke ships M3b) | shipped (M3a) |
+| `@emerge/artifacts-local-fs` | Local-filesystem artifact store | shipped (M3a) |
+| `@emerge/workspaces-git-worktree` | Git worktree + scoped-tmpdir workspace managers | shipped (M3a) |
 | `@emerge/memory/*` | Episodic + semantic + working + pinned; associative recall | planned (M5) |
-| `@emerge/tools` + `@emerge/tools/mcp` | Tool registry, MCP integration | planned (M1) |
-| `@emerge/surveillance` | Capability probing, adaptive decomposition | planned (M2) |
-| `@emerge/sandbox/*` | Execution isolation | planned (M1) |
-| `@emerge/telemetry/*` | Tracing, OTel + W3C trace context | planned (M1/M3) |
+| `@emerge/tools` | Tool registry, MCP integration | shipped (M1) |
+| `@emerge/surveillance` | Capability probing, adaptive decomposition | shipped (M2) |
+| `@emerge/sandbox-inproc` | In-process sandbox with permission policy | shipped (M1) |
+| `@emerge/telemetry-jsonl` | JSONL-backed telemetry | shipped (M1) |
 | `@emerge/persistence/*` | Durable task graphs, checkpoints, resume | planned (M4) |
-| `@emerge/artifacts/*` | Custodian-backed artifact store | planned (M3) |
-| `@emerge/workspaces/*` | Workspace allocation (git worktree default) | planned (M3) |
-| `@emerge/modes` | Built-in mode definitions + ModeRegistry impl | planned (M1) |
-| `@emerge/replay` | Session recorder + replayer | planned (M1/M3) |
-| `@emerge/experience/*` | Postmortem + experience library + bundles | planned (M3/M5) |
+| `@emerge/modes` | Built-in mode definitions + ModeRegistry impl | shipped (M1) |
+| `@emerge/replay` | Session recorder + replayer | shipped (M1) |
+| `@emerge/experience/*` | Postmortem + experience library + bundles | planned (M5) |
 | `@emerge/cli` | Terminal UX (TUI) | planned (M6) |
+
+> **M3a fix-up note:** Adjudicator-gated session completion and pinned-context recall went live in the M3a fix-up commit. Mid-flight quota grant (bus-routed, applied atomically between preStep calls) and terminal-result envelopes on all failure/abort paths were also wired in the same pass.
 
 ## Getting started
 

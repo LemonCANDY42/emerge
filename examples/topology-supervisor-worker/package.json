@@ -1,0 +1,22 @@
+{
+  "name": "@emerge/example-topology-supervisor-worker",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "scripts": {
+    "build": "tsc -b",
+    "typecheck": "tsc -b",
+    "clean": "rm -rf dist *.tsbuildinfo",
+    "start": "node dist/index.js"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0"
+  },
+  "dependencies": {
+    "@emerge/kernel": "workspace:*",
+    "@emerge/provider-mock": "workspace:*",
+    "@emerge/agents": "workspace:*",
+    "@emerge/replay": "workspace:*"
+  }
+}

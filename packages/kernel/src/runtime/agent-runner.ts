@@ -35,6 +35,7 @@ import type {
   ToolRegistry,
   ToolResult,
 } from "../contracts/index.js";
+import type { Budget, QuotaDecision } from "../contracts/index.js";
 import type { SessionRecorder } from "../contracts/replay.js";
 import type { AssessmentInput, StepProfile, Surveillance } from "../contracts/surveillance.js";
 import { runDecomposition } from "./decomposition.js";
@@ -111,6 +112,38 @@ export class AgentRunner implements AgentHandle {
     return this.agentCard;
   }
 
+  /**
+   * D: Apply a quota grant from the Custodian by expanding the agent's budget.
+   * Must be called atomically before the next scheduler.preStep() invocation.
+   * Merges granted dimensions additively into the current TerminationPolicy.budget.
+   */
+  applyQuotaGrant(decision: QuotaDecision): void {
+    if (decision.kind === "deny") return;
+    const { granted } = decision;
+    const current = this.deps.spec.termination.budget;
+    const updated: Budget = {
+      ...(current.tokensIn !== undefined || granted.tokensIn !== undefined
+        ? { tokensIn: (current.tokensIn ?? 0) + (granted.tokensIn ?? 0) }
+        : {}),
+      ...(current.tokensOut !== undefined || granted.tokensOut !== undefined
+        ? { tokensOut: (current.tokensOut ?? 0) + (granted.tokensOut ?? 0) }
+        : {}),
+      ...(current.wallMs !== undefined || granted.wallMs !== undefined
+        ? { wallMs: (current.wallMs ?? 0) + (granted.wallMs ?? 0) }
+        : {}),
+      ...(current.usd !== undefined || granted.usd !== undefined
+        ? { usd: (current.usd ?? 0) + (granted.usd ?? 0) }
+        : {}),
+    };
+    // Mutate via the scheduler's in-process state (safe; single-threaded JS)
+    const schedState = this.deps.scheduler.get(this.id);
+    if (schedState) {
+      schedState.policy = { ...schedState.policy, budget: updated };
+    }
+    // Also update the spec reference so subsequent card() calls reflect the grant
+    (this.deps.spec as { termination: { budget: Budget } }).termination.budget = updated;
+  }
+
   async send(envelope: BusEnvelope): Promise<Result<void, ContractError>> {
     return this.deps.bus.send(envelope);
   }
@@ -138,6 +171,28 @@ export class AgentRunner implements AgentHandle {
     const schedState = scheduler.register(spec.id, spec.termination);
     // Track which projection kinds have already emitted their one-time warn.
     const warnedProjections = new Set<string>();
+
+    // C3: Subscribe to quota decision envelopes addressed to this agent.
+    // When a grant/partial arrives between preStep calls, apply it immediately.
+    const quotaSub = bus.subscribe(this.id, { kind: "self" });
+    void (async () => {
+      for await (const env of quotaSub.events) {
+        if (
+          (env.kind === "quota.grant" || env.kind === "quota.partial") &&
+          env.to.kind === "agent" &&
+          env.to.id === this.id
+        ) {
+          this.applyQuotaGrant(env.decision);
+          console.log(
+            `[agent-runner:${this.id}] Received ${env.kind} — budget updated (tokensOut: ${env.decision.kind !== "deny" ? (env.decision.granted.tokensOut ?? "unchanged") : "n/a"})`,
+          );
+        } else if (env.kind === "quota.deny" && env.to.kind === "agent" && env.to.id === this.id) {
+          // C3: on deny, terminate cleanly
+          console.log(`[agent-runner:${this.id}] quota.deny received — terminating`);
+          schedState.abortController.abort();
+        }
+      }
+    })();
 
     this.setState("thinking");
 
@@ -190,6 +245,19 @@ export class AgentRunner implements AgentHandle {
 
       if (schedState.abortController.signal.aborted) {
         this.setState("failed");
+        // C5: always emit a terminal result envelope on abort so topology helpers don't hang
+        await bus.send({
+          kind: "result",
+          correlationId,
+          sessionId,
+          from: this.id,
+          to: { kind: "broadcast" },
+          timestamp: Date.now(),
+          payload: {
+            error: { code: "E_ABORTED", message: "Agent aborted" },
+            stopReason: "aborted",
+          },
+        });
         break;
       }
 
@@ -241,6 +309,18 @@ export class AgentRunner implements AgentHandle {
           this.deps.provider.capabilities.id,
           stepProfile.difficulty,
         );
+
+        // G: emit progress before surveillance assess
+        await bus.send({
+          kind: "progress",
+          correlationId,
+          sessionId,
+          from: this.id,
+          to: { kind: "broadcast" },
+          timestamp: Date.now(),
+          step: `surveillance.assess:${stepProfile.stepId}`,
+          note: `difficulty=${stepProfile.difficulty}`,
+        });
 
         const recommendation = await this.deps.surveillance.assess(assessInput);
 
@@ -384,6 +464,7 @@ export class AgentRunner implements AgentHandle {
               timestamp: Date.now(),
               payload: { reason: "human_timeout", checkpoint: recommendation.checkpoint },
             });
+            quotaSub.close();
             return;
           }
           // If replied, fall through — the injected reply text will be in messages
@@ -452,6 +533,20 @@ export class AgentRunner implements AgentHandle {
           stopReason = event.reason;
         } else if (event.type === "error") {
           this.setState("failed");
+          // C5: emit terminal result envelope on provider error
+          await bus.send({
+            kind: "result",
+            correlationId,
+            sessionId,
+            from: this.id,
+            to: { kind: "broadcast" },
+            timestamp: Date.now(),
+            payload: {
+              error: { code: "E_PROVIDER_ERROR", message: "Provider returned an error event" },
+              stopReason: "failed",
+            },
+          });
+          quotaSub.close();
           return;
         }
       }
@@ -561,6 +656,7 @@ export class AgentRunner implements AgentHandle {
                 timestamp: Date.now(),
                 payload: { reason: "tool_emitted", tool: targetTool },
               });
+              quotaSub.close();
               return;
             }
           }
@@ -579,6 +675,7 @@ export class AgentRunner implements AgentHandle {
           timestamp: Date.now(),
           payload: { text: textAccumulator, reason: "end_turn" },
         });
+        quotaSub.close();
         return;
       }
 
@@ -588,6 +685,18 @@ export class AgentRunner implements AgentHandle {
         const toolResultContents: ProviderContent[] = [];
 
         for (const [toolCallId, tc] of pendingToolCalls) {
+          // G: emit progress per tool call
+          await bus.send({
+            kind: "progress",
+            correlationId,
+            sessionId,
+            from: this.id,
+            to: { kind: "broadcast" },
+            timestamp: Date.now(),
+            currentTool: tc.name,
+            step: `tool:${tc.name}`,
+          });
+
           let parsed: unknown = {};
           try {
             parsed = JSON.parse(tc.inputJson || "{}");
@@ -792,12 +901,15 @@ export class AgentRunner implements AgentHandle {
                 timestamp: Date.now(),
                 payload: { reason: "tool_emitted", tool: targetTool },
               });
+              quotaSub.close();
               return;
             }
           }
         }
       }
     }
+    // C3: close the quota subscription on normal loop exit
+    quotaSub.close();
   }
 
   private setState(s: AgentState): void {
