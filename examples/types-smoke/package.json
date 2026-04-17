@@ -1,0 +1,15 @@
+{
+  "name": "@emerge/example-types-smoke",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Compile-time smoke test that every kernel contract type can be referenced and a sample value satisfies it.",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "build": "tsc -b",
+    "typecheck": "tsc -b"
+  },
+  "dependencies": {
+    "@emerge/kernel": "workspace:*"
+  }
+}

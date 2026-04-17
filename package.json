@@ -1,0 +1,23 @@
+{
+  "name": "emerge",
+  "version": "0.0.0",
+  "private": true,
+  "description": "A next-generation agent harness — model-agnostic, multi-agent native, and self-aware.",
+  "license": "MIT",
+  "type": "module",
+  "packageManager": "pnpm@9.12.0",
+  "engines": {
+    "node": ">=20.11"
+  },
+  "scripts": {
+    "build": "pnpm -r build",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test",
+    "lint": "biome check .",
+    "format": "biome format --write ."
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^1.9.4",
+    "typescript": "^5.6.3"
+  }
+}
