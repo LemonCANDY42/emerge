@@ -119,6 +119,34 @@ export async function assembleAgent(
     }
   }
 
+  // Mn1: validate behavior slots if present
+  if (blueprint.slots.behavior) {
+    for (const behaviorSlot of blueprint.slots.behavior) {
+      const value = bindings[behaviorSlot.name] ?? defaults[behaviorSlot.name];
+      if (behaviorSlot.required && value === undefined) {
+        return {
+          ok: false,
+          error: {
+            code: "E_MISSING_BINDING",
+            message: `Blueprint ${blueprint.id}: required behavior slot '${behaviorSlot.name}' is not bound`,
+          },
+        };
+      }
+      if (value !== undefined) {
+        const err = await validateBinding(value, behaviorSlot.accepts);
+        if (err !== undefined) {
+          return {
+            ok: false,
+            error: {
+              code: "E_BINDING_INVALID",
+              message: `Blueprint ${blueprint.id}: behavior slot '${behaviorSlot.name}' binding failed: ${err}`,
+            },
+          };
+        }
+      }
+    }
+  }
+
   // Merge defaults with bindings
   const merged = { ...defaults, ...bindings };
 

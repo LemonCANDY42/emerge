@@ -598,6 +598,14 @@ export type _AgentCardHasAcl = AgentCard["acl"];
 export type _MemoryItemHasPin = MemoryItem["pin"];
 export type _BusEnvelopeIsUnion = BusEnvelope["kind"];
 
+// C4: Verify that WorkspaceAllocation.baseRef is typed as string, so a value
+// like "--evil" is accepted as a string literal (not parsed as a flag).
+// The `--` separator is added by GitWorktreeWorkspaceManager; callers
+// never craft the git argv directly.
+export type _C4BaseRefIsSafeString = Workspace["baseRef"] extends string | undefined ? true : never;
+const _c4EvilRef: NonNullable<Workspace["baseRef"]> = "--evil";
+export const _c4Smoke = _c4EvilRef; // type-checks; no git is invoked
+
 // Interfaces that need a value for full instantiation are skipped in the
 // runtime sample (they require a real implementation), but we reference
 // them as types here to ensure they compile.

@@ -2,6 +2,7 @@
  * Kernel — the top-level facade. Constructor takes KernelConfig + optional modules.
  */
 
+import type { Verdict } from "../contracts/adjudicator.js";
 import type { CostMeter } from "../contracts/cost.js";
 import type { Custodian } from "../contracts/custodian.js";
 import type { ExperienceLibrary } from "../contracts/experience.js";
@@ -274,6 +275,14 @@ export class Kernel {
   private sessionId: SessionId = `sess-${Date.now()}` as SessionId;
   private contractId: ContractId = "contract-default" as ContractId;
   private readonly handles = new Map<AgentId, AgentHandle>();
+  /**
+   * C1: Track the latest verdict per session from the configured adjudicator.
+   * Only used when trustMode !== "implicit".
+   */
+  private _latestVerdict: Verdict | undefined = undefined;
+  private _verdictSubscriptionCleanup: (() => void) | undefined = undefined;
+  /** C1: One-time warn flag — emitted when no adjudicator is configured. */
+  private _warnedNoAdjudicator = false;
 
   constructor(config: KernelConfig, deps: KernelDeps = {}) {
     if (config.lineage.maxDepth < 1) {
@@ -396,12 +405,52 @@ export class Kernel {
   setSession(sessionId: SessionId, contractId: ContractId): void {
     this.sessionId = sessionId;
     this.contractId = contractId;
+    // Reset verdict tracking for the new session
+    this._latestVerdict = undefined;
     // M7: auto-start the recorder so callers don't have to
     this.deps.recorder?.start(sessionId, contractId);
     // D: restart quota auto-router with the new sessionId if custodian is mounted
     if (this.custodian) {
       this.startQuotaAutoRouter();
     }
+    // C1: start adjudicator verdict subscription
+    this.startVerdictSubscription();
+  }
+
+  /**
+   * C1: Subscribe to verdict envelopes from the configured adjudicator.
+   * Tracks the latest verdict per session for endSession() enforcement.
+   */
+  private startVerdictSubscription(): void {
+    // Clean up previous subscription
+    this._verdictSubscriptionCleanup?.();
+    this._verdictSubscriptionCleanup = undefined;
+
+    const adjudicatorId = this.config.roles.adjudicator;
+    if (!adjudicatorId) return;
+
+    const bus = this.bus;
+    let active = true;
+
+    // Subscribe as kernel observer to verdict envelopes from the adjudicator
+    const sub = bus.subscribe("kernel" as AgentId, {
+      kind: "from",
+      sender: adjudicatorId,
+      kinds: ["verdict"],
+    });
+
+    void (async () => {
+      for await (const env of sub.events) {
+        if (!active) break;
+        if (env.kind !== "verdict") continue;
+        this._latestVerdict = env.verdict;
+      }
+    })();
+
+    this._verdictSubscriptionCleanup = () => {
+      active = false;
+      sub.close();
+    };
   }
 
   async spawn(spec: AgentSpec): Promise<Result<AgentHandle>> {
@@ -507,6 +556,8 @@ export class Kernel {
     // C2: register the agent's card in the bus so ACL can be enforced
     if (this.bus instanceof InMemoryBus) {
       this.bus.registerCard(runner.card());
+      // Mn5: unregister the card when the agent emits a terminal result envelope
+      this.watchForTerminalResult(spec.id);
     }
 
     // Perform handshake
@@ -544,6 +595,29 @@ export class Kernel {
     return { ok: true, value: runner };
   }
 
+  /**
+   * Mn5: Subscribe to a single agent's result envelope and unregister its card
+   * when the terminal result arrives. Belt-and-braces alongside endSession.
+   */
+  private watchForTerminalResult(agentId: AgentId): void {
+    const bus = this.bus;
+    if (!(bus instanceof InMemoryBus)) return;
+    const sub = bus.subscribe("kernel" as AgentId, {
+      kind: "from",
+      sender: agentId,
+      kinds: ["result"],
+    });
+    void (async () => {
+      for await (const env of sub.events) {
+        if (env.kind === "result") {
+          bus.unregisterCard(agentId);
+          sub.close();
+          break;
+        }
+      }
+    })();
+  }
+
   async dispatch(envelope: BusEnvelope): Promise<Result<void>> {
     return this.bus.send(envelope);
   }
@@ -555,6 +629,36 @@ export class Kernel {
   }
 
   async endSession(): Promise<Result<SessionRecord | undefined>> {
+    // C1: Enforce adjudicator verdict gate unless trustMode is "implicit".
+    const trustMode = this.config.trustMode ?? "explicit";
+    const adjudicatorId = this.config.roles.adjudicator;
+
+    if (trustMode !== "implicit") {
+      if (!adjudicatorId) {
+        // No adjudicator configured — trust is implied, but warn once.
+        if (!this._warnedNoAdjudicator) {
+          this._warnedNoAdjudicator = true;
+          console.warn(
+            "[emerge/kernel] endSession: no adjudicator configured — session will complete without verdict gating. Set config.roles.adjudicator to enforce ADR 0012.",
+          );
+        }
+      } else if (this._latestVerdict?.kind !== "aligned") {
+        // Adjudicator is configured but hasn't issued an aligned verdict.
+        this._verdictSubscriptionCleanup?.();
+        return {
+          ok: false,
+          error: {
+            code: "E_NO_ALIGNED_VERDICT",
+            message: `Session cannot be marked completed: adjudicator has not issued an 'aligned' verdict (latest: ${this._latestVerdict?.kind ?? "none"}). Emit an 'aligned' verdict from the adjudicator before ending the session, or set config.trustMode: "implicit" to bypass.`,
+          },
+        };
+      }
+    }
+
+    // Clean up verdict subscription
+    this._verdictSubscriptionCleanup?.();
+    this._verdictSubscriptionCleanup = undefined;
+
     if (this.deps.recorder) {
       return this.deps.recorder.end(this.sessionId);
     }
@@ -563,6 +667,11 @@ export class Kernel {
 
   getBus(): Bus {
     return this.bus;
+  }
+
+  /** C2: Expose shared kernel Memory so callers (e.g. Custodian) can write into it. */
+  getMemory(): Memory {
+    return this.memory;
   }
 
   getToolRegistry(): ToolRegistry {

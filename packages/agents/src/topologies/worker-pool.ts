@@ -13,6 +13,7 @@ import type {
   AgentId,
   AgentSpec,
   Bus,
+  ContractError,
   CorrelationId,
   Result,
   SessionId,
@@ -34,6 +35,8 @@ export interface WorkerPoolHandle {
   readonly topology: Topology;
   run(kernel: KernelLike, sessionId: SessionId): Promise<Result<unknown>>;
 }
+
+export type WorkerPoolResult = Result<WorkerPoolHandle, ContractError>;
 
 function warnIfMissingTermination(spec: AgentSpec): void {
   if (!spec.termination) {
@@ -60,10 +63,22 @@ class LeaseQueue {
   }
 }
 
-export function workerPool(config: WorkerPoolConfig): WorkerPoolHandle {
+/**
+ * C6: Returns Result instead of throwing on bad input.
+ */
+export function workerPool(config: WorkerPoolConfig): WorkerPoolResult {
   const { pool, queue, reducer = (r) => r } = config;
 
   for (const w of pool) {
+    if (!w.termination) {
+      return {
+        ok: false,
+        error: {
+          code: "E_INVALID_TOPOLOGY",
+          message: `workerPool: worker (id=${w.id}) is missing a TerminationPolicy`,
+        },
+      };
+    }
     warnIfMissingTermination(w);
   }
 
@@ -183,5 +198,5 @@ export function workerPool(config: WorkerPoolConfig): WorkerPoolHandle {
     return { ok: true, value: reducer(allResults) };
   }
 
-  return { topology, run };
+  return { ok: true, value: { topology, run } };
 }

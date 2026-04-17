@@ -12,14 +12,19 @@ export type {
   SubTask,
   SupervisorWorkerConfig,
   SupervisorWorkerHandle,
+  SupervisorWorkerResult,
   KernelLike,
 } from "./topologies/supervisor-worker.js";
 
 export { workerPool } from "./topologies/worker-pool.js";
-export type { WorkerPoolConfig, WorkerPoolHandle } from "./topologies/worker-pool.js";
+export type {
+  WorkerPoolConfig,
+  WorkerPoolHandle,
+  WorkerPoolResult,
+} from "./topologies/worker-pool.js";
 
 export { pipeline } from "./topologies/pipeline.js";
-export type { PipelineConfig, PipelineHandle } from "./topologies/pipeline.js";
+export type { PipelineConfig, PipelineHandle, PipelineResult } from "./topologies/pipeline.js";
 
 export { buildCustodian } from "./roles/custodian.js";
 export type { BuildCustodianOptions, CustodianBuild, QuotaPolicy } from "./roles/custodian.js";

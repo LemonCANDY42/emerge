@@ -10,6 +10,7 @@ import type {
   AgentHandle,
   AgentId,
   AgentSpec,
+  ContractError,
   CorrelationId,
   Result,
   SessionId,
@@ -23,6 +24,12 @@ export interface PipelineConfig {
   readonly stages: readonly AgentSpec[];
   /** Optional result reducer for the final stage; default is identity. */
   readonly finalTransform?: (output: unknown) => unknown;
+  /**
+   * Mn8: The agent id to use as `from` for the first stage request.
+   * Defaults to the first stage's own id (self-send) if not provided.
+   * Pass a real orchestrator/supervisor agent id to avoid phantom sender ids.
+   */
+  readonly orchestratorId?: AgentId;
 }
 
 export interface PipelineHandle {
@@ -30,16 +37,33 @@ export interface PipelineHandle {
   run(input: unknown, kernel: KernelLike, sessionId: SessionId): Promise<Result<unknown>>;
 }
 
-export function pipeline(config: PipelineConfig): PipelineHandle {
+export type PipelineResult = Result<PipelineHandle, ContractError>;
+
+/**
+ * C6: Returns Result instead of throwing on bad input.
+ */
+export function pipeline(config: PipelineConfig): PipelineResult {
   const { stages, finalTransform = (x) => x } = config;
 
   if (stages.length === 0) {
-    throw new Error("pipeline: stages array must not be empty");
+    return {
+      ok: false,
+      error: {
+        code: "E_INVALID_TOPOLOGY",
+        message: "pipeline: stages array must not be empty",
+      },
+    };
   }
 
   for (const s of stages) {
     if (!s.termination) {
-      throw new Error(`pipeline: stage (id=${s.id}) is missing a TerminationPolicy`);
+      return {
+        ok: false,
+        error: {
+          code: "E_INVALID_TOPOLOGY",
+          message: `pipeline: stage (id=${s.id}) is missing a TerminationPolicy`,
+        },
+      };
     }
   }
 
@@ -87,12 +111,16 @@ export function pipeline(config: PipelineConfig): PipelineHandle {
       const nextHandle = handles[i + 1];
       const corrId = `pipe-${i}-${Date.now()}` as CorrelationId;
 
+      // Mn8: use orchestratorId for first-stage `from`; otherwise use previous stage id.
+      const fromId: AgentId =
+        i === 0 ? (config.orchestratorId ?? handle.id) : (handles[i - 1]?.id ?? handle.id);
+
       // Send the current value to this stage
       await bus.send({
         kind: "request",
         correlationId: corrId,
         sessionId,
-        from: handles[i - 1]?.id ?? ("pipeline-host" as AgentId),
+        from: fromId,
         to: { kind: "agent", id: handle.id },
         timestamp: Date.now(),
         payload: current,
@@ -137,5 +165,5 @@ export function pipeline(config: PipelineConfig): PipelineHandle {
     return { ok: true, value: finalTransform(current) };
   }
 
-  return { topology, run };
+  return { ok: true, value: { topology, run } };
 }

@@ -30,6 +30,12 @@ export interface BuildAdjudicatorOptions {
   readonly contract: Contract;
   readonly evaluate: (input: EvaluationInput) => Verdict | Promise<Verdict>;
   /**
+   * M2: The agent ids whose result envelopes the Adjudicator should evaluate.
+   * One subscription is created per sender so broadcasts from any of them are caught.
+   * If not provided, watchBus() uses a self-subscription (only catches direct messages).
+   */
+  readonly resultSenders?: readonly AgentId[];
+  /**
    * Provider id to assign to the adjudicator's spec. The adjudicator never makes
    * real LLM calls in M3a, but the kernel requires a mounted provider at spawn time.
    * Pass the id of any mock/stub provider that is mounted on the kernel.
@@ -137,46 +143,59 @@ export function buildAdjudicator(opts: BuildAdjudicatorOptions): AdjudicatorBuil
     const { bus, sessionId } = opts2;
     let active = true;
 
-    const sub = bus.subscribe(opts.id, {
-      kind: "from",
-      sender: "kernel" as AgentId,
-    });
+    /**
+     * M2: Subscribe to result envelopes from each known sender individually
+     * instead of a dead `{kind:"from", sender:"kernel"}` subscription.
+     * If no resultSenders were configured, fall back to a self-subscription.
+     */
+    const senders = opts.resultSenders ?? [];
+    const subs =
+      senders.length > 0
+        ? senders.map((sender) =>
+            bus.subscribe(opts.id, {
+              kind: "from",
+              sender,
+              kinds: ["result"],
+            }),
+          )
+        : [bus.subscribe(opts.id, { kind: "self" })];
 
-    // Also subscribe to all broadcasts to catch result envelopes from any sender
-    const broadcastSub = bus.subscribe(opts.id, { kind: "self" });
+    // Wire up one async loop per subscription so we don't miss concurrent results.
+    for (const sub of subs) {
+      void (async () => {
+        for await (const env of sub.events) {
+          if (!active) break;
+          if (env.kind !== "result") continue;
 
-    void (async () => {
-      for await (const env of broadcastSub.events) {
-        if (!active) break;
-        if (env.kind !== "result") continue;
+          const evalInput: EvaluationInput = {
+            outputs: {
+              payload: env.payload,
+              from: env.from,
+            },
+            artifacts: [],
+          };
 
-        const evalInput: EvaluationInput = {
-          outputs: {
-            payload: env.payload,
-            from: env.from,
-          },
-          artifacts: [],
-        };
+          const verdict = await adjInstance.evaluate(evalInput);
 
-        const verdict = await adjInstance.evaluate(evalInput);
-
-        const corrId = `verdict-${Date.now()}` as CorrelationId;
-        await bus.send({
-          kind: "verdict",
-          correlationId: corrId,
-          sessionId,
-          from: opts.id,
-          to: { kind: "broadcast" },
-          timestamp: Date.now(),
-          verdict,
-        });
-      }
-    })();
+          const corrId = `verdict-${Date.now()}` as CorrelationId;
+          await bus.send({
+            kind: "verdict",
+            correlationId: corrId,
+            sessionId,
+            from: opts.id,
+            to: { kind: "broadcast" },
+            timestamp: Date.now(),
+            verdict,
+          });
+        }
+      })();
+    }
 
     return () => {
       active = false;
-      sub.close();
-      broadcastSub.close();
+      for (const sub of subs) {
+        sub.close();
+      }
     };
   }
 

@@ -78,7 +78,7 @@ for the how.
 | `@emerge/kernel` | Contracts, scheduler, message bus, lifecycle, guards | shipped (M0–M3a) |
 | `@emerge/providers/mock` | Scripted mock provider for testing/demos | shipped (M1) |
 | `@emerge/providers/anthropic` | Anthropic Claude adapter | shipped (M1) |
-| `@emerge/agents` | Topology helpers + Custodian/Adjudicator/Postmortem roles | shipped (M3a) |
+| `@emerge/agents` | Topology helpers (supervisor/pool/pipeline) + Custodian/Adjudicator role helpers (Postmortem helper present, kernel auto-invoke ships M3b) | shipped (M3a) |
 | `@emerge/artifacts-local-fs` | Local-filesystem artifact store | shipped (M3a) |
 | `@emerge/workspaces-git-worktree` | Git worktree + scoped-tmpdir workspace managers | shipped (M3a) |
 | `@emerge/memory/*` | Episodic + semantic + working + pinned; associative recall | planned (M5) |
@@ -91,6 +91,8 @@ for the how.
 | `@emerge/replay` | Session recorder + replayer | shipped (M1) |
 | `@emerge/experience/*` | Postmortem + experience library + bundles | planned (M5) |
 | `@emerge/cli` | Terminal UX (TUI) | planned (M6) |
+
+> **M3a fix-up note:** Adjudicator-gated session completion and pinned-context recall went live in the M3a fix-up commit. Mid-flight quota grant (bus-routed, applied atomically between preStep calls) and terminal-result envelopes on all failure/abort paths were also wired in the same pass.
 
 ## Getting started
 

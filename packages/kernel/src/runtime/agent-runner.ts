@@ -172,6 +172,28 @@ export class AgentRunner implements AgentHandle {
     // Track which projection kinds have already emitted their one-time warn.
     const warnedProjections = new Set<string>();
 
+    // C3: Subscribe to quota decision envelopes addressed to this agent.
+    // When a grant/partial arrives between preStep calls, apply it immediately.
+    const quotaSub = bus.subscribe(this.id, { kind: "self" });
+    void (async () => {
+      for await (const env of quotaSub.events) {
+        if (
+          (env.kind === "quota.grant" || env.kind === "quota.partial") &&
+          env.to.kind === "agent" &&
+          env.to.id === this.id
+        ) {
+          this.applyQuotaGrant(env.decision);
+          console.log(
+            `[agent-runner:${this.id}] Received ${env.kind} — budget updated (tokensOut: ${env.decision.kind !== "deny" ? (env.decision.granted.tokensOut ?? "unchanged") : "n/a"})`,
+          );
+        } else if (env.kind === "quota.deny" && env.to.kind === "agent" && env.to.id === this.id) {
+          // C3: on deny, terminate cleanly
+          console.log(`[agent-runner:${this.id}] quota.deny received — terminating`);
+          schedState.abortController.abort();
+        }
+      }
+    })();
+
     this.setState("thinking");
 
     // Working memory: start with system prompt
@@ -223,6 +245,19 @@ export class AgentRunner implements AgentHandle {
 
       if (schedState.abortController.signal.aborted) {
         this.setState("failed");
+        // C5: always emit a terminal result envelope on abort so topology helpers don't hang
+        await bus.send({
+          kind: "result",
+          correlationId,
+          sessionId,
+          from: this.id,
+          to: { kind: "broadcast" },
+          timestamp: Date.now(),
+          payload: {
+            error: { code: "E_ABORTED", message: "Agent aborted" },
+            stopReason: "aborted",
+          },
+        });
         break;
       }
 
@@ -429,6 +464,7 @@ export class AgentRunner implements AgentHandle {
               timestamp: Date.now(),
               payload: { reason: "human_timeout", checkpoint: recommendation.checkpoint },
             });
+            quotaSub.close();
             return;
           }
           // If replied, fall through — the injected reply text will be in messages
@@ -497,6 +533,20 @@ export class AgentRunner implements AgentHandle {
           stopReason = event.reason;
         } else if (event.type === "error") {
           this.setState("failed");
+          // C5: emit terminal result envelope on provider error
+          await bus.send({
+            kind: "result",
+            correlationId,
+            sessionId,
+            from: this.id,
+            to: { kind: "broadcast" },
+            timestamp: Date.now(),
+            payload: {
+              error: { code: "E_PROVIDER_ERROR", message: "Provider returned an error event" },
+              stopReason: "failed",
+            },
+          });
+          quotaSub.close();
           return;
         }
       }
@@ -606,6 +656,7 @@ export class AgentRunner implements AgentHandle {
                 timestamp: Date.now(),
                 payload: { reason: "tool_emitted", tool: targetTool },
               });
+              quotaSub.close();
               return;
             }
           }
@@ -624,6 +675,7 @@ export class AgentRunner implements AgentHandle {
           timestamp: Date.now(),
           payload: { text: textAccumulator, reason: "end_turn" },
         });
+        quotaSub.close();
         return;
       }
 
@@ -849,12 +901,15 @@ export class AgentRunner implements AgentHandle {
                 timestamp: Date.now(),
                 payload: { reason: "tool_emitted", tool: targetTool },
               });
+              quotaSub.close();
               return;
             }
           }
         }
       }
     }
+    // C3: close the quota subscription on normal loop exit
+    quotaSub.close();
   }
 
   private setState(s: AgentState): void {

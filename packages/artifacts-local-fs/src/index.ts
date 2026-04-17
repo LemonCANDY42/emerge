@@ -11,7 +11,7 @@
  * Schedule it externally (e.g. on session end or via a cron).
  */
 
-import { createHash, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import fs from "node:fs";
 import fsPromises from "node:fs/promises";
 import path from "node:path";
@@ -49,7 +49,8 @@ function binPath(rootDir: string, handle: ArtifactHandle): string {
 }
 
 async function atomicWriteFile(filePath: string, data: Buffer | string): Promise<void> {
-  const tmp = `${filePath}.${createHash("sha256").update(String(Date.now())).digest("hex").slice(0, 8)}.tmp`;
+  // Mn6: use randomUUID() instead of Date.now() hash to avoid tmp filename collisions
+  const tmp = `${filePath}.${randomUUID()}.tmp`;
   await fsPromises.writeFile(tmp, data);
   await fsPromises.rename(tmp, filePath);
 }

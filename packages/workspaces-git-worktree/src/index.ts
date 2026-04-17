@@ -146,7 +146,8 @@ export class GitWorktreeWorkspaceManager implements WorkspaceManager {
     const baseRef = spec.baseRef ?? "HEAD";
 
     try {
-      git(this.baseRepo, ["worktree", "add", "-b", branch, worktreePath, baseRef]);
+      // C4: `--` separator prevents baseRef from being interpreted as a git flag
+      git(this.baseRepo, ["worktree", "add", "-b", branch, worktreePath, "--", baseRef]);
     } catch (err) {
       return {
         ok: false,
@@ -238,7 +239,8 @@ export class GitWorktreeWorkspaceManager implements WorkspaceManager {
 
     try {
       git(intoWs.root, ["checkout", intoBranch]);
-      git(intoWs.root, ["merge", "--no-edit", fromBranch]);
+      // C4: `--` separator prevents fromBranch from being interpreted as a git flag
+      git(intoWs.root, ["merge", "--no-edit", "--", fromBranch]);
       return { ok: true, value: { applied: true, conflicts: [] } };
     } catch (err) {
       const conflicts: string[] = [];
