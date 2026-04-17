@@ -1,5 +1,17 @@
 {
   "extends": "./tsconfig.base.json",
   "files": [],
-  "references": [{ "path": "./packages/kernel" }, { "path": "./examples/types-smoke" }]
+  "references": [
+    { "path": "./packages/kernel" },
+    { "path": "./packages/providers/mock" },
+    { "path": "./packages/providers/anthropic" },
+    { "path": "./packages/sandbox-inproc" },
+    { "path": "./packages/tools" },
+    { "path": "./packages/telemetry-jsonl" },
+    { "path": "./packages/modes" },
+    { "path": "./packages/replay" },
+    { "path": "./examples/types-smoke" },
+    { "path": "./examples/hello-agent" },
+    { "path": "./examples/replay-smoke" }
+  ]
 }
