@@ -3,6 +3,7 @@
  */
 
 import type { CostMeter } from "../contracts/cost.js";
+import type { Custodian } from "../contracts/custodian.js";
 import type { ExperienceLibrary } from "../contracts/experience.js";
 import type {
   AgentHandle,
@@ -45,6 +46,7 @@ import { AgentRunner } from "./agent-runner.js";
 import { InMemoryBus } from "./bus.js";
 import { InMemoryCostMeter } from "./cost-meter.js";
 import { InMemoryLineageGuard } from "./lineage-guard.js";
+import { QuotaRouter } from "./quota-router.js";
 import { Scheduler } from "./scheduler.js";
 
 export interface KernelDeps {
@@ -129,12 +131,16 @@ class SimpleMemory implements Memory {
     scope: RecallScope,
     budget: RecallBudget,
   ): Promise<Result<RecallResult>> {
-    // M12: honour scope.agents and query.attributes filters
-    let filtered = this.items;
+    // F: Separate pinned items — they are ALWAYS included regardless of budget.
+    // Future compressors MUST NOT drop items with `pin` set.
+    const pinnedItems = this.items.filter((item) => item.pin !== undefined);
+    let nonPinned = this.items.filter((item) => item.pin === undefined);
 
+    // M12: honour scope.agents and query.attributes filters (applied to non-pinned only;
+    // pinned items survive scope filtering by design — ADR 0016)
     if (scope.agents && scope.agents.length > 0) {
       const agentSet = new Set<string>(scope.agents);
-      filtered = filtered.filter((item) => {
+      nonPinned = nonPinned.filter((item) => {
         // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature requires bracket notation here
         const itemAgent = item.attributes["agent"];
         return itemAgent !== undefined && agentSet.has(String(itemAgent));
@@ -142,18 +148,36 @@ class SimpleMemory implements Memory {
     }
 
     if (query.attributes && Object.keys(query.attributes).length > 0) {
-      filtered = filtered.filter((item) =>
+      nonPinned = nonPinned.filter((item) =>
         Object.entries(query.attributes ?? {}).every(([k, v]) => item.attributes[k] === v),
       );
     }
 
-    const maxItems = budget.maxItems ?? filtered.length;
-    const items = filtered.slice(-maxItems);
+    const maxItems = budget.maxItems ?? nonPinned.length;
+    const selectedNonPinned = nonPinned.slice(-maxItems);
+    const droppedForBudget = Math.max(0, nonPinned.length - maxItems);
+
+    // Pinned items are always first; non-pinned follow
+    const items = [...pinnedItems, ...selectedNonPinned];
+
+    // Build trace entries for pinned items
+    const traceItems = pinnedItems.map((item) => ({
+      itemId: item.id,
+      score: 1.0,
+      components: {} as Readonly<{
+        semantic?: number;
+        structural?: number;
+        temporal?: number;
+        causal?: number;
+      }>,
+      reason: `pinned:${item.pin ?? "unknown"}`,
+    }));
+
     return {
       ok: true,
       value: {
         items,
-        trace: { items: [], droppedForBudget: Math.max(0, filtered.length - maxItems) },
+        trace: { items: traceItems, droppedForBudget },
       },
     };
   }
@@ -241,6 +265,10 @@ export class Kernel {
   private sandbox: Sandbox;
   private surveillance: Surveillance | undefined;
   private experienceLibrary: ExperienceLibrary | undefined;
+  /** D: mounted in-process Custodian for quota auto-routing. */
+  private custodian: Custodian | undefined;
+  /** D: quota router subscription cleanup — active when custodian is mounted. */
+  private quotaRouterCleanup: (() => void) | undefined;
   private readonly deps: KernelDeps;
   private readonly providers = new Map<string, Provider>();
   private sessionId: SessionId = `sess-${Date.now()}` as SessionId;
@@ -290,6 +318,78 @@ export class Kernel {
   }
 
   /**
+   * D: Register an in-process Custodian for quota auto-routing.
+   * When a `quota.request` envelope is sent on the bus to the configured
+   * custodian id, the kernel intercepts it, calls custodian.receiveQuotaRequest(),
+   * and replies with the appropriate quota.grant/deny/partial envelope.
+   *
+   * KernelConfig.roles.custodian must be set to the custodian's AgentId for
+   * this to be effective.
+   */
+  mountCustodian(custodian: Custodian): void {
+    this.custodian = custodian;
+    this.startQuotaAutoRouter();
+  }
+
+  private startQuotaAutoRouter(): void {
+    const custodianId = this.config.roles.custodian;
+    if (!custodianId || !this.custodian) return;
+
+    // Clean up previous subscription if any
+    this.quotaRouterCleanup?.();
+
+    const custodian = this.custodian;
+    const bus = this.bus;
+    const sessionId = this.sessionId;
+    let active = true;
+
+    // Subscribe as custodian to receive quota.request envelopes addressed to it
+    const sub = bus.subscribe(custodianId, { kind: "self" });
+
+    void (async () => {
+      for await (const env of sub.events) {
+        if (!active) break;
+        if (env.kind !== "quota.request") continue;
+
+        const req = env.request;
+        const decision = await custodian.receiveQuotaRequest(req);
+
+        const decisionKind: "quota.grant" | "quota.deny" | "quota.partial" =
+          decision.kind === "grant"
+            ? "quota.grant"
+            : decision.kind === "deny"
+              ? "quota.deny"
+              : "quota.partial";
+
+        await bus.send({
+          kind: decisionKind,
+          correlationId: env.correlationId,
+          sessionId,
+          from: custodianId,
+          to: { kind: "agent", id: env.from },
+          timestamp: Date.now(),
+          decision,
+        });
+      }
+    })();
+
+    this.quotaRouterCleanup = () => {
+      active = false;
+      sub.close();
+    };
+  }
+
+  /**
+   * D: Create a QuotaRouter pre-wired to this kernel's custodian.
+   * Returns undefined if no custodian is configured.
+   */
+  getQuotaRouter(): QuotaRouter | undefined {
+    const custodianId = this.config.roles.custodian;
+    if (!custodianId) return undefined;
+    return new QuotaRouter(this.bus, custodianId);
+  }
+
+  /**
    * Set the active session + contract, and auto-start the recorder if one is
    * attached.  Callers no longer need to call recorder.start() separately.
    */
@@ -298,6 +398,10 @@ export class Kernel {
     this.contractId = contractId;
     // M7: auto-start the recorder so callers don't have to
     this.deps.recorder?.start(sessionId, contractId);
+    // D: restart quota auto-router with the new sessionId if custodian is mounted
+    if (this.custodian) {
+      this.startQuotaAutoRouter();
+    }
   }
 
   async spawn(spec: AgentSpec): Promise<Result<AgentHandle>> {

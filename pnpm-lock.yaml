@@ -78,6 +78,25 @@ importers:
         specifier: ^20.11.0
         version: 20.19.39
 
+  examples/topology-supervisor-worker:
+    dependencies:
+      '@emerge/agents':
+        specifier: workspace:*
+        version: link:../../packages/agents
+      '@emerge/kernel':
+        specifier: workspace:*
+        version: link:../../packages/kernel
+      '@emerge/provider-mock':
+        specifier: workspace:*
+        version: link:../../packages/providers/mock
+      '@emerge/replay':
+        specifier: workspace:*
+        version: link:../../packages/replay
+    devDependencies:
+      '@types/node':
+        specifier: ^20.11.0
+        version: 20.19.39
+
   examples/types-smoke:
     dependencies:
       '@emerge/kernel':
@@ -98,6 +117,26 @@ importers:
       '@emerge/surveillance':
         specifier: workspace:*
         version: link:../../packages/surveillance
+    devDependencies:
+      '@types/node':
+        specifier: ^20.11.0
+        version: 20.19.39
+
+  packages/agents:
+    dependencies:
+      '@emerge/kernel':
+        specifier: workspace:*
+        version: link:../kernel
+    devDependencies:
+      '@types/node':
+        specifier: ^20.11.0
+        version: 20.19.39
+
+  packages/artifacts-local-fs:
+    dependencies:
+      '@emerge/kernel':
+        specifier: workspace:*
+        version: link:../kernel
     devDependencies:
       '@types/node':
         specifier: ^20.11.0
@@ -174,6 +213,16 @@ importers:
       zod:
         specifier: ^3.24.0
         version: 3.25.76
+    devDependencies:
+      '@types/node':
+        specifier: ^20.11.0
+        version: 20.19.39
+
+  packages/workspaces-git-worktree:
+    dependencies:
+      '@emerge/kernel':
+        specifier: workspace:*
+        version: link:../kernel
     devDependencies:
       '@types/node':
         specifier: ^20.11.0

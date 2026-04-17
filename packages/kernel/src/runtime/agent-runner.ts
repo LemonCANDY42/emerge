@@ -35,6 +35,7 @@ import type {
   ToolRegistry,
   ToolResult,
 } from "../contracts/index.js";
+import type { Budget, QuotaDecision } from "../contracts/index.js";
 import type { SessionRecorder } from "../contracts/replay.js";
 import type { AssessmentInput, StepProfile, Surveillance } from "../contracts/surveillance.js";
 import { runDecomposition } from "./decomposition.js";
@@ -109,6 +110,38 @@ export class AgentRunner implements AgentHandle {
 
   card(): AgentCard {
     return this.agentCard;
+  }
+
+  /**
+   * D: Apply a quota grant from the Custodian by expanding the agent's budget.
+   * Must be called atomically before the next scheduler.preStep() invocation.
+   * Merges granted dimensions additively into the current TerminationPolicy.budget.
+   */
+  applyQuotaGrant(decision: QuotaDecision): void {
+    if (decision.kind === "deny") return;
+    const { granted } = decision;
+    const current = this.deps.spec.termination.budget;
+    const updated: Budget = {
+      ...(current.tokensIn !== undefined || granted.tokensIn !== undefined
+        ? { tokensIn: (current.tokensIn ?? 0) + (granted.tokensIn ?? 0) }
+        : {}),
+      ...(current.tokensOut !== undefined || granted.tokensOut !== undefined
+        ? { tokensOut: (current.tokensOut ?? 0) + (granted.tokensOut ?? 0) }
+        : {}),
+      ...(current.wallMs !== undefined || granted.wallMs !== undefined
+        ? { wallMs: (current.wallMs ?? 0) + (granted.wallMs ?? 0) }
+        : {}),
+      ...(current.usd !== undefined || granted.usd !== undefined
+        ? { usd: (current.usd ?? 0) + (granted.usd ?? 0) }
+        : {}),
+    };
+    // Mutate via the scheduler's in-process state (safe; single-threaded JS)
+    const schedState = this.deps.scheduler.get(this.id);
+    if (schedState) {
+      schedState.policy = { ...schedState.policy, budget: updated };
+    }
+    // Also update the spec reference so subsequent card() calls reflect the grant
+    (this.deps.spec as { termination: { budget: Budget } }).termination.budget = updated;
   }
 
   async send(envelope: BusEnvelope): Promise<Result<void, ContractError>> {
@@ -241,6 +274,18 @@ export class AgentRunner implements AgentHandle {
           this.deps.provider.capabilities.id,
           stepProfile.difficulty,
         );
+
+        // G: emit progress before surveillance assess
+        await bus.send({
+          kind: "progress",
+          correlationId,
+          sessionId,
+          from: this.id,
+          to: { kind: "broadcast" },
+          timestamp: Date.now(),
+          step: `surveillance.assess:${stepProfile.stepId}`,
+          note: `difficulty=${stepProfile.difficulty}`,
+        });
 
         const recommendation = await this.deps.surveillance.assess(assessInput);
 
@@ -588,6 +633,18 @@ export class AgentRunner implements AgentHandle {
         const toolResultContents: ProviderContent[] = [];
 
         for (const [toolCallId, tc] of pendingToolCalls) {
+          // G: emit progress per tool call
+          await bus.send({
+            kind: "progress",
+            correlationId,
+            sessionId,
+            from: this.id,
+            to: { kind: "broadcast" },
+            timestamp: Date.now(),
+            currentTool: tc.name,
+            step: `tool:${tc.name}`,
+          });
+
           let parsed: unknown = {};
           try {
             parsed = JSON.parse(tc.inputJson || "{}");
