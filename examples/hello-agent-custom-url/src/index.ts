@@ -167,6 +167,17 @@ async function main() {
   console.log(`  Tokens out: ${snapshot.usage.tokensOut}`);
   console.log(`  USD:        $${snapshot.usage.usd.toFixed(4)}`);
 
+  // Surface any terminal error so users can debug upstream/provider failures.
+  const runtimeHandle = handle as unknown as {
+    lastError?: () => { code: string; message: string } | undefined;
+  };
+  const lastErr = runtimeHandle.lastError?.();
+  if (lastErr) {
+    const msg =
+      lastErr.message.length > 500 ? `${lastErr.message.slice(0, 500)}...` : lastErr.message;
+    console.error(`\nProvider error (${lastErr.code}): ${msg}`);
+  }
+
   const cost = kernel.getCostMeter().ledger();
   console.log(`\nCost ledger: $${cost.totals.grand.toFixed(4)} total`);
 

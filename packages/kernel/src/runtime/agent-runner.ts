@@ -105,6 +105,10 @@ export class AgentRunner implements AgentHandle {
   private readonly deps: AgentRunnerDeps;
   private readonly agentCard: AgentCard;
   private _state: AgentState = "idle";
+  /** Last terminal error observed by this agent (e.g. provider 502). Surfaced via lastError(). */
+  private _lastError:
+    | { code: string; message: string; cause?: unknown; retriable?: boolean }
+    | undefined;
   private readonly snapshotListeners: Array<(s: AgentSnapshot) => void> = [];
   private _lastActivityAt = Date.now();
   // In-memory artifact store for to_handle projections
@@ -205,6 +209,16 @@ export class AgentRunner implements AgentHandle {
 
   card(): AgentCard {
     return this.agentCard;
+  }
+
+  /**
+   * Optional: returns the last terminal error this agent observed, if any.
+   * Useful for demos / dashboards to surface upstream-provider failures
+   * (auth errors, gateway 502s, model refusals) instead of just reporting
+   * "state: failed" with no context.
+   */
+  lastError(): { code: string; message: string; cause?: unknown; retriable?: boolean } | undefined {
+    return this._lastError;
   }
 
   /**
@@ -666,6 +680,10 @@ export class AgentRunner implements AgentHandle {
           stopReason = event.reason;
         } else if (event.type === "error") {
           this.setState("failed");
+          // Surface the actual provider error message so demos / dashboards / tests
+          // can show the cause (was previously a generic "Provider returned an error event"
+          // that hid useful info like Cloudflare 502s, auth failures, etc.).
+          this._lastError = event.error;
           // C5: emit terminal result envelope on provider error
           await bus.send({
             kind: "result",
@@ -675,7 +693,7 @@ export class AgentRunner implements AgentHandle {
             to: { kind: "broadcast" },
             timestamp: Date.now(),
             payload: {
-              error: { code: "E_PROVIDER_ERROR", message: "Provider returned an error event" },
+              error: event.error,
               stopReason: "failed",
             },
           });
