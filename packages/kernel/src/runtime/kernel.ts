@@ -5,7 +5,7 @@
 import type { Verdict } from "../contracts/adjudicator.js";
 import type { CostMeter } from "../contracts/cost.js";
 import type { Custodian } from "../contracts/custodian.js";
-import type { ExperienceLibrary } from "../contracts/experience.js";
+import type { ExperienceLibrary, Postmortem } from "../contracts/experience.js";
 import type {
   AgentHandle,
   AgentId,
@@ -297,6 +297,8 @@ export class Kernel {
   private sandbox: Sandbox;
   private surveillance: Surveillance | undefined;
   private experienceLibrary: ExperienceLibrary | undefined;
+  /** C: Postmortem analyzer — invoked after endSession() if also an ExperienceLibrary is mounted. */
+  private postmortem: Postmortem | undefined;
   /** D: mounted in-process Custodian for quota auto-routing. */
   private custodian: Custodian | undefined;
   /** D: quota router subscription cleanup — active when custodian is mounted. */
@@ -345,9 +347,18 @@ export class Kernel {
     this.experienceLibrary = library;
   }
 
+  /**
+   * C: Attach a Postmortem analyzer. When both a Postmortem AND an ExperienceLibrary
+   * are mounted, endSession() automatically invokes postmortem.analyze(record) after
+   * the SessionRecord is finalized, then library.ingest() for each emitted Experience.
+   * Errors from these steps are returned as additional fields on the result; not thrown.
+   * See ADR 0019.
+   */
+  mountPostmortem(postmortem: Postmortem): void {
+    this.postmortem = postmortem;
+  }
+
   mountSurveillance(s: Surveillance): void {
-    // surveillance is wired; assess()/observe() are not yet called from the
-    // loop (deferred to M2).
     this.surveillance = s;
   }
 
@@ -607,6 +618,11 @@ export class Kernel {
 
     this.handles.set(spec.id, runner);
 
+    // C1/C2: open inbox + quota subscriptions NOW, before returning the handle.
+    // This ensures any bus.send(request, id) that the caller fires after spawn()
+    // is buffered in the runner's queue and not lost.
+    runner.openInbox();
+
     // C2: register the agent's card in the bus so ACL can be enforced
     if (this.bus instanceof InMemoryBus) {
       this.bus.registerCard(runner.card());
@@ -682,7 +698,12 @@ export class Kernel {
     }
   }
 
-  async endSession(): Promise<Result<SessionRecord | undefined>> {
+  /** M1: Structured result for endSession — carries the session record plus any
+   *  non-fatal postmortem errors so callers can observe them rather than relying
+   *  on console.warn alone. */
+  async endSession(): Promise<
+    Result<{ record: SessionRecord | undefined; postmortemErrors?: ContractError[] }>
+  > {
     // C1: Enforce adjudicator verdict gate unless trustMode is "implicit".
     const trustMode = this.config.trustMode ?? "explicit";
     const adjudicatorId = this.config.roles.adjudicator;
@@ -713,10 +734,65 @@ export class Kernel {
     this._verdictSubscriptionCleanup?.();
     this._verdictSubscriptionCleanup = undefined;
 
+    let record: SessionRecord | undefined;
     if (this.deps.recorder) {
-      return this.deps.recorder.end(this.sessionId);
+      const recResult = await this.deps.recorder.end(this.sessionId);
+      if (!recResult.ok) return recResult;
+      record = recResult.value;
     }
-    return { ok: true, value: undefined };
+
+    // M1: Warn once when only one of (Postmortem, ExperienceLibrary) is mounted.
+    // Both are required for auto-invoke to fire; a mismatch is almost certainly
+    // a misconfiguration and should be visible at session-end.
+    if (this.postmortem !== undefined && this.experienceLibrary === undefined) {
+      console.warn(
+        "[emerge/kernel] endSession: Postmortem mounted without ExperienceLibrary; auto-invoke disabled. Mount an ExperienceLibrary to enable postmortem→ingest wiring (ADR 0019).",
+      );
+    } else if (this.postmortem === undefined && this.experienceLibrary !== undefined) {
+      console.warn(
+        "[emerge/kernel] endSession: ExperienceLibrary mounted without Postmortem; auto-invoke disabled. Mount a Postmortem to enable postmortem→ingest wiring (ADR 0019).",
+      );
+    }
+
+    // C: ADR 0019 — auto-invoke Postmortem + ExperienceLibrary ingest after session ends.
+    // Errors are non-fatal: returned as postmortemErrors so callers can observe them;
+    // the session record is still committed regardless.
+    const postmortemErrors: ContractError[] = [];
+
+    if (
+      this.postmortem !== undefined &&
+      this.experienceLibrary !== undefined &&
+      record !== undefined
+    ) {
+      const pm = this.postmortem;
+      const lib = this.experienceLibrary;
+
+      const analyzeResult = await pm.analyze(record);
+      if (!analyzeResult.ok) {
+        postmortemErrors.push({
+          code: "E_POSTMORTEM_ANALYZE",
+          message: `postmortem.analyze: ${analyzeResult.error.message}`,
+        });
+      } else {
+        for (const exp of analyzeResult.value) {
+          const ingestResult = await lib.ingest(exp);
+          if (!ingestResult.ok) {
+            postmortemErrors.push({
+              code: "E_POSTMORTEM_INGEST",
+              message: `library.ingest(${exp.id}): ${ingestResult.error.message}`,
+            });
+          }
+        }
+      }
+    }
+
+    return {
+      ok: true,
+      value: {
+        record,
+        ...(postmortemErrors.length > 0 ? { postmortemErrors } : {}),
+      },
+    };
   }
 
   getBus(): Bus {

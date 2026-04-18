@@ -75,6 +75,81 @@ importers:
         specifier: ^20.11.0
         version: 20.19.39
 
+  examples/hello-agent-anthropic:
+    dependencies:
+      '@emerge/kernel':
+        specifier: workspace:*
+        version: link:../../packages/kernel
+      '@emerge/modes':
+        specifier: workspace:*
+        version: link:../../packages/modes
+      '@emerge/provider-anthropic':
+        specifier: workspace:*
+        version: link:../../packages/providers/anthropic
+      '@emerge/replay':
+        specifier: workspace:*
+        version: link:../../packages/replay
+      '@emerge/sandbox-inproc':
+        specifier: workspace:*
+        version: link:../../packages/sandbox-inproc
+      '@emerge/tools':
+        specifier: workspace:*
+        version: link:../../packages/tools
+    devDependencies:
+      '@types/node':
+        specifier: ^20.11.0
+        version: 20.19.39
+
+  examples/hello-agent-custom-url:
+    dependencies:
+      '@emerge/kernel':
+        specifier: workspace:*
+        version: link:../../packages/kernel
+      '@emerge/modes':
+        specifier: workspace:*
+        version: link:../../packages/modes
+      '@emerge/provider-openai-compat':
+        specifier: workspace:*
+        version: link:../../packages/providers/openai-compat
+      '@emerge/replay':
+        specifier: workspace:*
+        version: link:../../packages/replay
+      '@emerge/sandbox-inproc':
+        specifier: workspace:*
+        version: link:../../packages/sandbox-inproc
+      '@emerge/tools':
+        specifier: workspace:*
+        version: link:../../packages/tools
+    devDependencies:
+      '@types/node':
+        specifier: ^20.11.0
+        version: 20.19.39
+
+  examples/hello-agent-openai:
+    dependencies:
+      '@emerge/kernel':
+        specifier: workspace:*
+        version: link:../../packages/kernel
+      '@emerge/modes':
+        specifier: workspace:*
+        version: link:../../packages/modes
+      '@emerge/provider-openai':
+        specifier: workspace:*
+        version: link:../../packages/providers/openai
+      '@emerge/replay':
+        specifier: workspace:*
+        version: link:../../packages/replay
+      '@emerge/sandbox-inproc':
+        specifier: workspace:*
+        version: link:../../packages/sandbox-inproc
+      '@emerge/tools':
+        specifier: workspace:*
+        version: link:../../packages/tools
+    devDependencies:
+      '@types/node':
+        specifier: ^20.11.0
+        version: 20.19.39
+
   examples/hello-mcp:
     dependencies:
       '@emerge/kernel':
@@ -216,6 +291,32 @@ importers:
       '@emerge/kernel':
         specifier: workspace:*
         version: link:../../kernel
+
+  packages/providers/openai:
+    dependencies:
+      '@emerge/kernel':
+        specifier: workspace:*
+        version: link:../../kernel
+      openai:
+        specifier: ^4.80.0
+        version: 4.104.0(zod@3.25.76)
+    devDependencies:
+      '@types/node':
+        specifier: ^20.11.0
+        version: 20.19.39
+
+  packages/providers/openai-compat:
+    dependencies:
+      '@emerge/kernel':
+        specifier: workspace:*
+        version: link:../../kernel
+      '@emerge/provider-openai':
+        specifier: workspace:*
+        version: link:../openai
+    devDependencies:
+      '@types/node':
+        specifier: ^20.11.0
+        version: 20.19.39
 
   packages/replay:
     dependencies:
@@ -948,6 +1049,18 @@ packages:
 
   once@1.4.0:
     resolution: {integrity: sha512-lNaJgI+2Q5URQBkccEKHTQOPaXdUxnZZElQTZY0MFUAuaEqe1E+Nyvgdz/aIyNi6Z9MzO5dv1H8n58/GELp3+w==}
+
+  openai@4.104.0:
+    resolution: {integrity: sha512-p99EFNsA/yX6UhVO93f5kJsDRLAg+CTA2RBqdHK4RtK8u5IJw32Hyb2dTGKbnnFmnuoBv5r7Z2CURI9sGZpSuA==}
+    hasBin: true
+    peerDependencies:
+      ws: ^8.18.0
+      zod: ^3.23.8
+    peerDependenciesMeta:
+      ws:
+        optional: true
+      zod:
+        optional: true
 
   parseurl@1.3.3:
     resolution: {integrity: sha512-CiyeOxFT/JZyN5m0z9PfXw4SCBJ6Sygz1Dpl0wqjlhDEGGBP1GnsUVEL0p63hoG1fcj3fHynXi9NYO4nWOL+qQ==}
@@ -1825,6 +1938,20 @@ snapshots:
   once@1.4.0:
     dependencies:
       wrappy: 1.0.2
+
+  openai@4.104.0(zod@3.25.76):
+    dependencies:
+      '@types/node': 18.19.130
+      '@types/node-fetch': 2.6.13
+      abort-controller: 3.0.0
+      agentkeepalive: 4.6.0
+      form-data-encoder: 1.7.2
+      formdata-node: 4.4.1
+      node-fetch: 2.7.0
+    optionalDependencies:
+      zod: 3.25.76
+    transitivePeerDependencies:
+      - encoding
 
   parseurl@1.3.3: {}
 

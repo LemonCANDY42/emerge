@@ -38,7 +38,18 @@ export interface SupervisorWorkerConfig {
   readonly dispatch: "sequential" | "parallel";
   /** Optional decomposer; default splits a string goal into N chunks. */
   readonly decomposer?: (input: unknown) => SubTask[];
-  /** Optional result reducer; default collects into an array. */
+  /**
+   * Optional JS aggregator function. When provided, used as-is (backward-compatible
+   * behavior). When absent, the supervisor agent is run via the bus and its LLM
+   * response becomes the topology's final output (M3c1 default).
+   *
+   * @default undefined — LLM aggregation via supervisor agent
+   */
+  readonly aggregator?: (results: readonly unknown[]) => unknown;
+  /**
+   * @deprecated Use `aggregator` instead. Kept for backward compatibility.
+   * If both are set, `aggregator` wins.
+   */
   readonly reducer?: (results: readonly unknown[]) => unknown;
   /**
    * M5: Optional custodian/adjudicator ids for tightening worker ACLs.
@@ -47,6 +58,11 @@ export interface SupervisorWorkerConfig {
    */
   readonly custodianId?: AgentId;
   readonly adjudicatorId?: AgentId;
+  /**
+   * Optional acceptance criteria text injected into the supervisor's aggregation prompt.
+   * Sourced from a Contract.acceptanceCriteria description if provided.
+   */
+  readonly acceptanceCriteria?: string;
 }
 
 /** Minimal interface for the Kernel operations we need. */
@@ -109,8 +125,9 @@ function tightenWorkerAcl(
 }
 
 /**
- * Subscribe to all workers' broadcasts from the supervisor's perspective,
- * forwarding delta + progress envelopes upward as supervisor progress envelopes.
+ * Subscribe to a worker's delta/progress broadcasts and re-emit them as supervisor
+ * progress envelopes (relay). Subscribes under a synthetic orchestrator id so the
+ * subscriber identity does not collide with the supervisor agent's own subscriptions.
  */
 function watchWorkerBroadcasts(
   bus: Bus,
@@ -119,7 +136,9 @@ function watchWorkerBroadcasts(
   sessionId: SessionId,
   corrId: CorrelationId,
 ): () => void {
-  const sub = bus.subscribe(supervisorId, {
+  // C3: synthetic orchestrator id keeps relay subscriptions separate from the supervisor's own.
+  const orchestratorId = `${supervisorId}-orchestrator` as AgentId;
+  const sub = bus.subscribe(orchestratorId, {
     kind: "from",
     sender: workerId,
     kinds: ["delta", "progress"],
@@ -152,7 +171,9 @@ function watchWorkerBroadcasts(
  * C6: Returns Result instead of throwing on bad input.
  */
 export function supervisorWorker(config: SupervisorWorkerConfig): SupervisorWorkerResult {
-  const { supervisor, workers, dispatch, reducer = defaultReducer } = config;
+  // B: aggregator wins over deprecated reducer; when neither is set, use LLM aggregation
+  const jsAggregator = config.aggregator ?? config.reducer;
+  const { supervisor, workers, dispatch } = config;
   const decomposer = config.decomposer;
 
   if (!supervisor.termination) {
@@ -250,8 +271,11 @@ export function supervisorWorker(config: SupervisorWorkerConfig): SupervisorWork
         supervisorCorrId,
       );
 
-      // Subscribe to the worker's result and signal:terminate before running
-      const resultSub = bus.subscribe(supHandle.id, {
+      // C3: subscribe as the topology orchestrator (synthetic id), not the supervisor agent,
+      // to avoid "supervisor subscribes to its own results" confusion.
+      // The "from" matcher filters by sender (the worker), not the subscriber id.
+      const orchestratorId = `${supHandle.id}-orchestrator` as AgentId;
+      const resultSub = bus.subscribe(orchestratorId, {
         kind: "from",
         sender: handle.id,
         kinds: ["result", "signal"],
@@ -342,8 +366,81 @@ export function supervisorWorker(config: SupervisorWorkerConfig): SupervisorWork
       note: "all workers complete; aggregating",
     });
 
-    const aggregate = reducer(workerResults);
-    return { ok: true, value: aggregate };
+    // B: If a JS aggregator is provided, use it (backward-compat / callers that don't want LLM).
+    // Otherwise, run the supervisor agent with a synthesized aggregation prompt and use its
+    // LLM response as the topology's final output.
+    if (jsAggregator !== undefined) {
+      const aggregate = jsAggregator(workerResults);
+      return { ok: true, value: aggregate };
+    }
+
+    // LLM aggregation: dispatch a synthesized prompt to the supervisor via bus,
+    // then run the supervisor agent and collect its response.
+    const resultSummaries = workerResults
+      .map((r, i) => {
+        const text =
+          r && typeof r === "object" && "text" in r
+            ? String((r as { text: unknown }).text)
+            : typeof r === "string"
+              ? r
+              : JSON.stringify(r);
+        return `Worker ${i + 1}: ${text}`;
+      })
+      .join("\n");
+
+    const criteriaSuffix =
+      config.acceptanceCriteria !== undefined
+        ? ` Acceptance criteria: ${config.acceptanceCriteria}`
+        : "";
+
+    const aggregationPrompt = `Aggregate these ${workerResults.length} worker results into a single coherent output:\n\n${resultSummaries}${criteriaSuffix}`;
+
+    const aggCorrId =
+      `sv-agg-${Date.now()}-${Math.random().toString(36).slice(2)}` as CorrelationId;
+
+    // C3: subscribe as the topology orchestrator (synthetic id) to the supervisor's result
+    // broadcast. Using a distinct subscriber id makes it clear this is the orchestrator
+    // waiting for the supervisor's output — not the supervisor waiting for itself.
+    const orchestratorId = `${supHandle.id}-orchestrator` as AgentId;
+    const supResultSub = bus.subscribe(orchestratorId, {
+      kind: "from",
+      sender: supHandle.id,
+      kinds: ["result"],
+    });
+
+    await bus.send({
+      kind: "request",
+      correlationId: aggCorrId,
+      sessionId,
+      from: supHandle.id,
+      to: { kind: "agent", id: supHandle.id },
+      timestamp: Date.now(),
+      payload: aggregationPrompt,
+    });
+
+    const supResultPromise = (async (): Promise<unknown> => {
+      for await (const env of supResultSub.events) {
+        if (env.kind === "result") {
+          supResultSub.close();
+          return env.payload;
+        }
+      }
+      supResultSub.close();
+      return null;
+    })();
+
+    await kernel.runAgent(supHandle);
+    const supResult = await supResultPromise;
+
+    // Extract text from the supervisor's result envelope
+    const supText =
+      supResult && typeof supResult === "object" && "text" in supResult
+        ? String((supResult as { text: unknown }).text)
+        : typeof supResult === "string"
+          ? supResult
+          : JSON.stringify(supResult);
+
+    return { ok: true, value: { text: supText, workerResults } };
   }
 
   return { ok: true, value: { topology, run } };

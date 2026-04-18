@@ -110,11 +110,97 @@ export class AgentRunner implements AgentHandle {
   // In-memory artifact store for to_handle projections
   private readonly artifactStore = new Map<ArtifactHandle, string>();
   private artifactCounter = 0;
+  // C1/C2: inbox queue for request envelopes arriving before or during run().
+  // The subscription is opened in openInbox() which Kernel.spawn() calls immediately
+  // after construction — before returning the handle to callers. This ensures any
+  // bus.send(request) that follows spawn() is never missed.
+  private readonly _inboxQueue: Array<{ payload: unknown; correlationId: CorrelationId }> = [];
+  /** C1: inbox subscription — opened by openInbox() called from Kernel.spawn(). */
+  private _inboxSub: import("../contracts/index.js").Subscription | null = null;
+  /** C3: quota subscription — opened by openInbox() called from Kernel.spawn(). */
+  private _quotaSub: import("../contracts/index.js").Subscription | null = null;
+  /** m7: count of envelopes dropped due to back-pressure; warn on first drop. */
+  private _inboxDropsWarned = false;
 
   constructor(deps: AgentRunnerDeps) {
     this.deps = deps;
     this.id = deps.spec.id;
     this.agentCard = makeCard(deps.spec, deps.provider);
+  }
+
+  /**
+   * C1/C2: Open inbox and quota subscriptions immediately after construction.
+   * Must be called by Kernel.spawn() before returning the handle so that any
+   * bus.send(request) from the caller cannot race ahead of the subscription.
+   *
+   * run() drains the already-open subscriptions rather than opening new ones.
+   */
+  openInbox(): void {
+    const { bus } = this.deps;
+
+    // Inbox: queue request/query envelopes addressed to this agent.
+    this._inboxSub = bus.subscribe(this.id, { kind: "self" });
+    const inboxSub = this._inboxSub;
+    // m7: capture a reference to the droppedCount getter if the bus exposes it.
+    const inboxDropRef = inboxSub as { readonly droppedCount?: number };
+    void (async () => {
+      for await (const env of inboxSub.events) {
+        // m7: warn once on first observed back-pressure drop in inbox.
+        const dropped = inboxDropRef.droppedCount ?? 0;
+        if (dropped > 0 && !this._inboxDropsWarned) {
+          this._inboxDropsWarned = true;
+          console.warn(
+            `[emerge] inbox dropped envelopes due to back-pressure: ${dropped} (agent: ${this.id}). M3c2 will surface this in telemetry.`,
+          );
+        }
+        if (env.kind === "request" || env.kind === "query") {
+          if (env.to.kind === "agent" && env.to.id === this.id) {
+            const payload = (env as { payload?: unknown }).payload;
+            if (payload !== undefined && payload !== null) {
+              this._inboxQueue.push({
+                payload,
+                correlationId: env.correlationId,
+              });
+            }
+          }
+        }
+      }
+    })();
+
+    // Quota: apply grant/partial envelopes addressed to this agent immediately.
+    this._quotaSub = bus.subscribe(this.id, { kind: "self" });
+    const quotaSub = this._quotaSub;
+    void (async () => {
+      for await (const env of quotaSub.events) {
+        if (
+          (env.kind === "quota.grant" || env.kind === "quota.partial") &&
+          env.to.kind === "agent" &&
+          env.to.id === this.id
+        ) {
+          this.applyQuotaGrant(env.decision);
+          console.log(
+            `[agent-runner:${this.id}] Received ${env.kind} — budget updated (tokensOut: ${env.decision.kind !== "deny" ? (env.decision.granted.tokensOut ?? "unchanged") : "n/a"})`,
+          );
+        } else if (env.kind === "quota.deny" && env.to.kind === "agent" && env.to.id === this.id) {
+          // C3: on deny, terminate via abortController — schedState will be set in run()
+          // We store the signal but can't abort now without schedState; run() checks it.
+          // Use a flag instead so run() sees the deny when it starts.
+          console.log(`[agent-runner:${this.id}] quota.deny received before run() — will abort`);
+          this._quotaDeniedBeforeRun = true;
+        }
+      }
+    })();
+  }
+
+  /** C1: set when quota.deny arrives before run() starts. run() aborts on sight. */
+  private _quotaDeniedBeforeRun = false;
+
+  /** C1: close both subscriptions opened by openInbox(). Called at all terminal paths. */
+  private closeInbox(): void {
+    this._inboxSub?.close();
+    this._quotaSub?.close();
+    this._inboxSub = null;
+    this._quotaSub = null;
   }
 
   card(): AgentCard {
@@ -174,31 +260,46 @@ export class AgentRunner implements AgentHandle {
 
   /**
    * Run the perceive → decide → act → observe loop until termination.
+   *
+   * C1/C2: The inbox and quota subscriptions were opened by openInbox() during
+   * Kernel.spawn(). run() only drains the already-open queues; it does NOT open
+   * new subscriptions, so no race between spawn→send→run is possible.
    */
   async run(): Promise<void> {
     const { spec, scheduler, sessionId, correlationId, bus } = this.deps;
+
+    // C1: if openInbox() was never called (e.g. test harnesses that bypass Kernel.spawn),
+    // open the subscriptions lazily so tests still work.
+    if (this._inboxSub === null) {
+      this.openInbox();
+    }
+
     const schedState = scheduler.register(spec.id, spec.termination);
     // Track which projection kinds have already emitted their one-time warn.
     const warnedProjections = new Set<string>();
 
-    // C3: Subscribe to quota decision envelopes addressed to this agent.
-    // When a grant/partial arrives between preStep calls, apply it immediately.
-    const quotaSub = bus.subscribe(this.id, { kind: "self" });
+    // C1: if quota.deny arrived before run() started, abort immediately.
+    if (this._quotaDeniedBeforeRun) {
+      console.log(`[agent-runner:${this.id}] quota.deny was received before run() — aborting`);
+      schedState.abortController.abort();
+    }
+
+    // Wire the quota deny path into schedState now that we have it.
+    // The openInbox() loop handles grant/partial; deny aborts the controller.
+    // Re-open a dedicated one-shot listener for deny (the existing quotaSub already handles it
+    // via the flag above for pre-run case; for mid-run we need to abort directly).
+    // Instead of opening another subscription, we simply check the flag and re-check on abort.
+    // The simplest approach: keep checking schedState.abortController in the existing quota loop.
+    // Since openInbox() already handles quota.deny by setting _quotaDeniedBeforeRun,
+    // we add a one-shot bus subscriber specifically for mid-run quota.deny.
+    const midRunQuotaDenySub = bus.subscribe(this.id, { kind: "self" });
     void (async () => {
-      for await (const env of quotaSub.events) {
-        if (
-          (env.kind === "quota.grant" || env.kind === "quota.partial") &&
-          env.to.kind === "agent" &&
-          env.to.id === this.id
-        ) {
-          this.applyQuotaGrant(env.decision);
-          console.log(
-            `[agent-runner:${this.id}] Received ${env.kind} — budget updated (tokensOut: ${env.decision.kind !== "deny" ? (env.decision.granted.tokensOut ?? "unchanged") : "n/a"})`,
-          );
-        } else if (env.kind === "quota.deny" && env.to.kind === "agent" && env.to.id === this.id) {
-          // C3: on deny, terminate cleanly
+      for await (const env of midRunQuotaDenySub.events) {
+        if (env.kind === "quota.deny" && env.to.kind === "agent" && env.to.id === this.id) {
           console.log(`[agent-runner:${this.id}] quota.deny received — terminating`);
           schedState.abortController.abort();
+          midRunQuotaDenySub.close();
+          return;
         }
       }
     })();
@@ -268,6 +369,22 @@ export class AgentRunner implements AgentHandle {
           },
         });
         break;
+      }
+
+      // A3: Drain the inbox queue — inject any pending request payloads as user messages.
+      // This is how topology helpers (supervisorWorker, workerPool, pipeline) deliver tasks:
+      // they send a `request` envelope on the bus; the runner picks it up here and treats
+      // the payload as the task input for this iteration.
+      while (this._inboxQueue.length > 0) {
+        const item = this._inboxQueue.shift();
+        if (item !== undefined) {
+          const text =
+            typeof item.payload === "string" ? item.payload : JSON.stringify(item.payload);
+          messages.push({
+            role: "user",
+            content: [{ type: "text", text }],
+          });
+        }
       }
 
       this.setState("thinking");
@@ -473,7 +590,8 @@ export class AgentRunner implements AgentHandle {
               timestamp: Date.now(),
               payload: { reason: "human_timeout", checkpoint: recommendation.checkpoint },
             });
-            quotaSub.close();
+            this.closeInbox();
+            midRunQuotaDenySub.close();
             return;
           }
           // If replied, fall through — the injected reply text will be in messages
@@ -561,7 +679,8 @@ export class AgentRunner implements AgentHandle {
               stopReason: "failed",
             },
           });
-          quotaSub.close();
+          this.closeInbox();
+          midRunQuotaDenySub.close();
           return;
         }
       }
@@ -757,7 +876,8 @@ export class AgentRunner implements AgentHandle {
                 timestamp: Date.now(),
                 payload: { reason: "tool_emitted", tool: targetTool },
               });
-              quotaSub.close();
+              this.closeInbox();
+              midRunQuotaDenySub.close();
               return;
             }
           }
@@ -776,7 +896,8 @@ export class AgentRunner implements AgentHandle {
           timestamp: Date.now(),
           payload: { text: textAccumulator, reason: "end_turn" },
         });
-        quotaSub.close();
+        this.closeInbox();
+        midRunQuotaDenySub.close();
         return;
       }
 
@@ -1077,15 +1198,17 @@ export class AgentRunner implements AgentHandle {
                 timestamp: Date.now(),
                 payload: { reason: "tool_emitted", tool: targetTool },
               });
-              quotaSub.close();
+              this.closeInbox();
+              midRunQuotaDenySub.close();
               return;
             }
           }
         }
       }
     }
-    // C3: close the quota subscription on normal loop exit
-    quotaSub.close();
+    // C1/C2: close subscriptions on normal loop exit
+    this.closeInbox();
+    midRunQuotaDenySub.close();
   }
 
   private setState(s: AgentState): void {
