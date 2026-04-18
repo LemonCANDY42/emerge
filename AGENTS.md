@@ -8,6 +8,18 @@ If you are an AI agent landing in this repository, start here. This file tells y
 
 Key concepts: **contracts** (small, stable interfaces), **surveillance** (capability probing + adaptive decomposition), **kernel** (the runtime loop), **modules** (swappable providers, memory, tools, sandbox), **topology** (supervisor/worker/pool/pipeline/etc as values, not classes).
 
+## What emerge is, and is NOT
+
+emerge is **agent infrastructure** — a kernel + contracts + modules. It is not a chat product, an IDE, or a hosted service. Three combo selling points define it; if you don't need any of them, you probably want a simpler harness.
+
+| Selling point | What it means | Why it matters |
+|---|---|---|
+| **Auditable verification** | Verdict provenance (Adjudicator emits typed verdicts; kernel gates session completion) + cost ledger (per agent / topology / contract USD rollup) + replay (record-replay tier reproduces sessions exactly without re-prompting the model) — **all three integrated**. | No leaderboard competitor has all three together. ForgeCode has runtime-enforced verification; KIRA has two-step task_complete. Neither has cost ledger + replay tied to verdict. |
+| **Self-hostable any-model** | Anthropic + OpenAI Chat + OpenAI Responses + any custom `baseURL` (Ollama, vLLM, llama.cpp, LM Studio, OpenRouter, your own service) all work through the same `Provider` contract. Kernel compiles with zero provider deps. | Cursor, Claude Code, ChatGPT agent are managed services. emerge is the "Kubernetes for agents" — runs anywhere, any model, fully owned by the user. |
+| **Experience-driven self-improvement** | Postmortem analyzer distills `Experience` records keyed by problem-solving *approach* (not topic). Surveillance reads them as priors at session start. Sessions get smarter session-over-session without retraining the model. | OpenDev (arXiv 2603.05344) has the closest published analog ("playbook of learned strategies"). emerge's approach-keyed distillation + replay-grounded provenance is the differentiator. |
+
+If you came here looking for: a Claude Code replacement → use Claude Code. A ForgeCode-on-leaderboard equivalent → use ForgeCode. A managed agent service → use Anthropic Agent SDK or OpenAI Agents. emerge fills a different slot: **the open, auditable, self-hostable kernel that lets you run any of the above's *patterns* on infrastructure you control**.
+
 ## AI agents: read these files first
 
 **In order:**

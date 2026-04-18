@@ -1,6 +1,39 @@
 # Vision
 
-> A harness should make a weaker model competent and a stronger model devastating.
+> A harness should make a weaker model competent and a stronger model
+> devastating — and make every run **auditable, reproducible, and
+> self-hostable** regardless of which model is on the other end.
+
+## The dual thesis
+
+`emerge` was originally pitched on a single thesis: make weaker models
+competent on bigger tasks via surveillance + adaptive decomposition. As of
+April 2026, two things changed our positioning:
+
+- **Frontier models reached a bare-metal ceiling that closed the
+  scaffolding gap.** Bare Claude Mythos hit 82% on Terminal-Bench 2.0
+  with no scaffolding — matching ForgeCode's hand-engineered scaffold on
+  Opus 4.6 (also 81.8%). For the very latest frontier models, "harness
+  adds capability" is a shrinking story.
+- **For non-frontier models, harness quality is still the primary
+  variable.** The same-model / different-agent spread is still 16+ points
+  (ForgeCode + Opus 4.6 = 81.8% vs bare Opus 4.6 = 65.4%). The 80% of
+  users who can't afford frontier on every call still need what we ship.
+
+So `emerge` carries a **dual thesis** from here on:
+
+1. **For weaker / non-frontier models:** make them competent on bigger
+   tasks via surveillance + opaque adaptive decomposition. Original
+   thesis, intact.
+2. **For any model, including frontier:** make the run *around* the
+   model — not the model itself — auditable (verdict provenance + cost
+   ledger + replay), reproducible (record-replay + pinned tiers),
+   self-hostable (any-baseURL providers + git-worktree workspaces +
+   in-process kernel), and composable (AgentBlueprint slots +
+   Custodian/Adjudicator gates + bus topologies).
+
+The first thesis fades as the model frontier rises; the second compounds
+as agent infrastructure becomes the bottleneck.
 
 ## The problem
 

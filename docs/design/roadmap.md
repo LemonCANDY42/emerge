@@ -113,6 +113,30 @@ self-built tooling.
     + cost + verdicts.
 - A small Phoenix / Langfuse integration guide in `docs/integrations/`.
 
+### M3c2.5 — Minimal experience-library backend
+**Goal:** close the surveillance/experience self-improving loop with a
+real-running backend before competition catches up.
+
+Driven by the April 2026 absorption pass (`docs/design/leaderboard-absorption-2026-04.md`):
+OpenDev (arXiv 2603.05344) shipped the closest published analog to our
+`Experience` library — a "playbook of learned strategies that evolve
+based on feedback." Our differentiator only holds if we have a
+real-running backend, not a contract-with-no-impl.
+
+- `@emerge/experience-inmemory` package. In-memory `ExperienceLibrary`
+  implementation with `hint` / `ingest` / `export` / `importBundle` /
+  `get` working end-to-end. Persistence comes in M4; this milestone
+  proves the loop runs.
+- Wire `Kernel.mountExperienceLibrary()` into the existing
+  `agent-runner` `surveillance.assess()` path so `experienceHints` are
+  actually populated when a library is mounted (currently always
+  `undefined`).
+- Update `examples/topology-supervisor-worker` to mount the library +
+  show that a second session of the same task gets a faster path
+  because the postmortem-derived experience hints surveillance.
+- One ADR on experience storage / merge semantics so M5's persistent
+  backend builds on the same shape.
+
 ### M3d — TUI + Web monitor
 **Goal:** see what the harness is doing in real time, in the terminal
 or the browser.
@@ -130,6 +154,30 @@ or the browser.
   and VoltAgent's VoltOps (flowchart-focused) by surfacing
   contract-enforcement verdicts and Custodian/Adjudicator decisions as
   first-class UI elements.
+
+### M4-prep — First Terminal-Bench 2.0 public submission
+**Goal:** a real number on a public leaderboard, not just a contract.
+
+Driven by the April 2026 absorption pass: 7 of the top-10 leaderboard
+entries use OpenAI/Codex backends; emerge has all three protocols
+shipped (M3c1) but **0 public benchmark submissions**. Even a low score
+(say 50%) backed by our auditability + reproducibility narrative is
+more credible positioning than zero.
+
+- Build `@emerge/eval-terminal-bench` per the existing plan in
+  `docs/design/terminal-bench-integration-plan.md`.
+- `@emerge/sandbox-harbor` for the Docker / container exec path.
+- A `TerminalBenchBlueprint` that ships sensible defaults
+  (active surveillance, `record-replay` reproducibility tier so each
+  attempt is reproducible, mounted Custodian + Adjudicator with strict
+  verification gate).
+- Submit one public run to tbench.ai with the result + the SessionRecord
+  bundle published as evidence. Goal: prove the architecture runs
+  end-to-end against a third-party evaluator, surface real bottlenecks.
+
+This is intentionally pre-M4 (persistence) because TB 2.0 tasks fit in
+single-process sessions; persistence is M4 only after we know what the
+real bottlenecks are.
 
 ### M4 — Persistence + resume
 **Goal:** sessions survive process restarts; long-running tasks resume

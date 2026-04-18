@@ -125,11 +125,13 @@ EMERGE_LLM_BASE_URL=http://localhost:11434/v1 EMERGE_LLM_MODEL=llama3.2 \
 | `@emerge/persistence/*` | Durable task graphs, checkpoints, resume | planned (M4) |
 | `@emerge/modes` | Built-in mode definitions + ModeRegistry impl | shipped (M1) |
 | `@emerge/replay` | Session recorder + replayer | shipped (M1) |
-| `@emerge/experience/*` | Postmortem + experience library + bundles | in-kernel (M3c1), standalone package planned (M5) |
+| `@emerge/experience/*` | Postmortem + experience library + bundles | in-kernel contracts (M3c1); in-memory backend planned (M3c2.5); SQLite backend planned (M5) |
 | `@emerge/cli` | `emerge run/replay/probe/status` + JSONL schema + OTel emission | planned (M3c2) |
 | `@emerge/telemetry-otel` | OpenTelemetry exporter — Phoenix / Langfuse / any OTel sink | planned (M3c2) |
+| `@emerge/experience-inmemory` | In-memory `ExperienceLibrary` + surveillance `experienceHints` wired end-to-end | planned (M3c2.5) |
 | `@emerge/tui` | Ink+React live monitor: topology / verdicts / cost / replay scrubber | planned (M3d) |
 | `@emerge/dashboard` | Vite+React+WebSocket web monitor: topology graph / verdict feed / replay | planned (M3d) |
+| `@emerge/eval-terminal-bench` + `@emerge/sandbox-harbor` + `TerminalBenchBlueprint` | First public TB 2.0 leaderboard submission | planned (M4-prep) |
 
 > **M3c1 note:** Inbox unification (AgentRunner consumes `request` envelopes addressed to it), supervisor LLM aggregation in `supervisorWorker`, `Kernel.mountPostmortem()` + auto-invoke in `endSession()`, OpenAI/OpenAI-compat providers, and three real-model demos shipped in this milestone.
 >
