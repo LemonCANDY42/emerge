@@ -1,0 +1,26 @@
+{
+  "name": "@emerge/example-otel-phoenix",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "scripts": {
+    "build": "tsc -b",
+    "typecheck": "tsc -b",
+    "clean": "rm -rf dist *.tsbuildinfo",
+    "start": "node dist/index.js"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@opentelemetry/exporter-trace-otlp-http": "^0.57.0",
+    "@opentelemetry/sdk-node": "^0.57.0",
+    "@opentelemetry/resources": "^1.30.0",
+    "@opentelemetry/semantic-conventions": "^1.30.0"
+  },
+  "dependencies": {
+    "@emerge/kernel": "workspace:*",
+    "@emerge/provider-mock": "workspace:*",
+    "@emerge/telemetry-otel": "workspace:*",
+    "@opentelemetry/api": "^1.9.0"
+  }
+}

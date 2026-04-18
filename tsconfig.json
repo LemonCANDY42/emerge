@@ -22,6 +22,9 @@
     { "path": "./examples/topology-supervisor-worker" },
     { "path": "./packages/tools-mcp" },
     { "path": "./examples/eval-probes" },
-    { "path": "./examples/hello-mcp" }
+    { "path": "./examples/hello-mcp" },
+    { "path": "./packages/telemetry-otel" },
+    { "path": "./packages/cli" },
+    { "path": "./examples/otel-phoenix" }
   ]
 }

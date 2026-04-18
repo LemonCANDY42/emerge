@@ -1,0 +1,17 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "dist",
+    "composite": true,
+    "tsBuildInfoFile": "dist/.tsbuildinfo",
+    "types": ["node"]
+  },
+  "include": ["src/**/*"],
+  "references": [
+    { "path": "../../packages/kernel" },
+    { "path": "../../packages/replay" },
+    { "path": "../../packages/telemetry-jsonl" },
+    { "path": "../../packages/providers/mock" }
+  ]
+}
