@@ -121,9 +121,23 @@ export class McpToolRegistry {
   /**
    * Start each configured server, list its tools, and register them in the
    * provided ToolRegistry. Returns the same registry for chaining.
+   *
+   * C5: validates server names against /^[a-zA-Z0-9-]+$/ to prevent tool-name
+   * collision ambiguity when `__` is used as a separator in mcp__server__tool.
    */
   async connect(registry: ToolRegistry): Promise<Result<ToolRegistry>> {
+    const SERVER_NAME_RE = /^[a-zA-Z0-9-]+$/;
     for (const serverConfig of this.config.servers) {
+      if (!SERVER_NAME_RE.test(serverConfig.name)) {
+        return {
+          ok: false,
+          error: {
+            code: "E_MCP_INVALID_SERVER_NAME",
+            message: `MCP server name "${serverConfig.name}" is invalid: must match /^[a-zA-Z0-9-]+$/. Underscores and other characters are disallowed to prevent tool-name collision ambiguity.`,
+            retriable: false,
+          },
+        };
+      }
       const connectResult = await this.connectOne(serverConfig, registry);
       if (!connectResult.ok) return connectResult;
     }
@@ -216,6 +230,11 @@ export class McpToolRegistry {
       };
 
       const sandbox = this.config.sandbox;
+      // M2: use the first declared effect from the PermissionDescriptor as the
+      // sandbox effect, not a hardcoded "state_read". This ensures write-classified
+      // tools run in the write-sandbox tier.
+      const firstEffect = permission.effects[0] ?? "state_read";
+
       const tool: Tool = {
         spec,
         async invoke(call: ToolInvocation): Promise<Result<ToolResult, ContractError>> {
@@ -231,7 +250,8 @@ export class McpToolRegistry {
 
           let mcpResult: Awaited<ReturnType<typeof client.callTool>>;
           const runResult = await sandbox.run(
-            { effect: "state_read", target: emergeToolName },
+            // M2: use the tool's actual first declared effect, not hardcoded state_read
+            { effect: firstEffect, target: emergeToolName },
             async () => {
               mcpResult = await client.callTool(
                 { name: mcpTool.name, arguments: input },
@@ -269,6 +289,19 @@ export class McpToolRegistry {
           const preview = textParts.join("\n");
           const isError = callResult.isError === true;
 
+          // M1: only report sizeBytes when we have a real size from the MCP response
+          // (e.g. a resource block with an explicit size field). Reporting preview.length
+          // as sizeBytes is dishonest and defeats truncation detection in the agent-runner.
+          const resourceSize = (() => {
+            for (const block of callResult.content) {
+              if (block.type === "resource" && block.resource) {
+                const size = (block.resource as { size?: number }).size;
+                if (typeof size === "number") return size;
+              }
+            }
+            return undefined;
+          })();
+
           const result: ToolResult = {
             ok: !isError,
             preview:
@@ -276,7 +309,8 @@ export class McpToolRegistry {
               (resourceRefs.length > 0
                 ? `Resources: ${resourceRefs.join(", ")}`
                 : "(no text content)"),
-            sizeBytes: preview.length,
+            // M1: omit sizeBytes unless the MCP response provides a real size
+            ...(resourceSize !== undefined ? { sizeBytes: resourceSize } : {}),
             ...(resourceRefs.length > 0 ? { meta: { resourceUris: resourceRefs } } : {}),
           };
 

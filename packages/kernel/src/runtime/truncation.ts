@@ -20,6 +20,9 @@ import type { ToolResult } from "../contracts/tool.js";
  * The notice is always prepended so it appears first in the model's context,
  * making it impossible to overlook. The format matches what ForgeCode found
  * most effective: explicit byte counts + a clear read-more call-to-action.
+ *
+ * Idempotent: if `result.meta.truncationNoticed` is already `true`, the notice
+ * has already been applied and this call is a no-op (C1 sentinel).
  */
 export function applyTruncationNotice(
   result: ToolResult,
@@ -27,6 +30,12 @@ export function applyTruncationNotice(
   previewSize: number,
 ): ToolResult {
   if (fullSize <= previewSize) return result;
+
+  // C1: idempotency sentinel — don't double-apply
+  if (result.meta !== undefined) {
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature requires bracket notation here
+    if (result.meta["truncationNoticed"] === true) return result;
+  }
 
   const handleClause =
     result.handle !== undefined
@@ -39,6 +48,10 @@ export function applyTruncationNotice(
     ...result,
     preview: notice + result.preview,
     sizeBytes: fullSize,
+    meta: {
+      ...result.meta,
+      truncationNoticed: true,
+    },
   };
 }
 
@@ -47,8 +60,14 @@ export function applyTruncationNotice(
  *
  * Used by the agent-runner for any result where `sizeBytes > preview.length`.
  * When `sizeBytes` is undefined, no notice is applied (tool did not report size).
+ * When `meta.truncationNoticed` is already true, skips (C1 sentinel).
  */
 export function maybeApplyTruncationNotice(result: ToolResult): ToolResult {
   if (result.sizeBytes === undefined) return result;
+  // C1: sentinel check — applyTruncationNotice will also check, but bail early
+  if (result.meta !== undefined) {
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature requires bracket notation here
+    if (result.meta["truncationNoticed"] === true) return result;
+  }
   return applyTruncationNotice(result, result.sizeBytes, result.preview.length);
 }

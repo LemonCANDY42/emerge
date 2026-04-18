@@ -54,17 +54,20 @@ import { SchemaAdapterRegistry } from "./schema-adapter.js";
 /**
  * Post-step verification config. Opt-in: costs an extra provider round-trip per step.
  *
- * mode "off"          — no verification (default)
- * mode "per-step"     — auto-invoke the configured verifier after each completed step
- * mode "on-completion" — invoke only at session end before endSession()
+ * mode "off"        — no verification (default)
+ * mode "per-step"   — auto-invoke the configured verifier after each completed step
+ * mode "on-failure" — invoke only when the agent's tool call returned an error
  *
  * verifier defaults to config.roles.adjudicator when undefined.
+ * timeoutMs defaults to 5000 (milliseconds to wait for a verdict before proceeding).
  * See ADR 0032.
  */
 export interface VerificationConfig {
-  readonly mode: "off" | "per-step" | "on-completion";
+  readonly mode: "off" | "per-step" | "on-failure";
   /** AgentId of the verifier; defaults to KernelConfig.roles.adjudicator. */
   readonly verifier?: AgentId;
+  /** Milliseconds to wait for a verdict before proceeding. Default: 5000. */
+  readonly timeoutMs?: number;
 }
 
 export interface KernelDeps {
@@ -112,6 +115,15 @@ class SimpleToolRegistry implements ToolRegistry {
   private readonly tools = new Map<string, Tool>();
 
   register(tool: Tool): void {
+    // C5: reject duplicate tool names with a typed error instead of silently overwriting
+    if (this.tools.has(tool.spec.name)) {
+      throw Object.assign(
+        new Error(
+          `Tool "${tool.spec.name}" is already registered. Duplicate tool names are not allowed.`,
+        ),
+        { code: "E_TOOL_DUPLICATE" },
+      );
+    }
     this.tools.set(tool.spec.name, tool);
   }
   unregister(name: string): void {

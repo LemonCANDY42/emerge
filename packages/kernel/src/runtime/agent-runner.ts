@@ -625,77 +625,8 @@ export class AgentRunner implements AgentHandle {
       }
       // --- end surveillance observe ---
 
-      // --- M3b: per-step verification (opt-in via VerificationConfig) ---
-      const verif = this.deps.verification;
-      if (verif && verif.mode === "per-step") {
-        const verifierId = verif.verifier ?? this.deps.adjudicatorId;
-        if (verifierId) {
-          // Send a verdict-request envelope to the verifier and inject the response
-          // as a system note into working memory so the next step sees it.
-          const verdictCorrId =
-            `verdict-${this.id}-${schedState.iteration}-${Date.now()}` as CorrelationId;
-          const verdictSub = bus.subscribe(this.id, {
-            kind: "from",
-            sender: verifierId,
-            kinds: ["verdict"],
-          });
-
-          await bus.send({
-            kind: "request",
-            correlationId: verdictCorrId,
-            sessionId,
-            from: this.id,
-            to: { kind: "agent", id: verifierId },
-            timestamp: Date.now(),
-            payload: {
-              type: "verdict_request",
-              stepId: `${this.id}-step-${schedState.iteration}`,
-              output: textAccumulator,
-            },
-          });
-
-          // Await verdict with a 5s timeout — don't block the loop indefinitely
-          const verdictTimeout = 5_000;
-          const verdictResult = await Promise.race([
-            (async () => {
-              for await (const env of verdictSub.events) {
-                if (env.correlationId === verdictCorrId && env.kind === "verdict") {
-                  return env.verdict;
-                }
-              }
-              return null;
-            })(),
-            new Promise<null>((resolve) => setTimeout(() => resolve(null), verdictTimeout)),
-          ]);
-          verdictSub.close();
-
-          if (verdictResult) {
-            const verdictKind = (verdictResult as { kind?: string }).kind ?? "unknown";
-            if (verdictKind === "off-track" || verdictKind === "failed") {
-              // Inject verdict as a corrective system note — agent loop continues
-              const suggestion =
-                (verdictResult as { suggestion?: string; reason?: string }).suggestion ??
-                (verdictResult as { suggestion?: string; reason?: string }).reason ??
-                "Reconsider your approach.";
-              messages.push({
-                role: "user",
-                content: [
-                  {
-                    type: "text",
-                    text: `[verification:${verdictKind}] ${suggestion}`,
-                  },
-                ],
-              });
-              console.log(
-                `[agent-runner:${this.id}] verification verdict=${verdictKind} — injecting correction`,
-              );
-            }
-          }
-        }
-      }
-      // --- end per-step verification ---
-
-      // Append assistant message
+      // C2: Append assistant message FIRST — the model must see its own output
+      // before the verifier's reaction (ordering: assistant(X) → user(verdict) → user(toolresults))
       const assistantContent: ProviderContent[] = [];
       if (textAccumulator) {
         assistantContent.push({ type: "text", text: textAccumulator });
@@ -724,6 +655,91 @@ export class AgentRunner implements AgentHandle {
           },
         ]);
       }
+
+      // --- M3b: per-step verification (opt-in via VerificationConfig) ---
+      // C2: runs AFTER assistant message is appended; C3: aligned with ADR 0032
+      const verif = this.deps.verification;
+      if (verif && verif.mode === "per-step") {
+        const verifierId = verif.verifier ?? this.deps.adjudicatorId;
+        if (verifierId) {
+          // Send a verdict-request envelope to the verifier and inject the response
+          // as a user message into working memory so the next step sees it.
+          const verdictCorrId =
+            `verdict-${this.id}-${schedState.iteration}-${Date.now()}` as CorrelationId;
+          const verdictSub = bus.subscribe(this.id, {
+            kind: "from",
+            sender: verifierId,
+            kinds: ["verdict"],
+          });
+
+          await bus.send({
+            kind: "request",
+            correlationId: verdictCorrId,
+            sessionId,
+            from: this.id,
+            to: { kind: "agent", id: verifierId },
+            timestamp: Date.now(),
+            payload: {
+              type: "verdict_request",
+              stepId: `${this.id}-step-${schedState.iteration}`,
+              output: textAccumulator,
+            },
+          });
+
+          // C3: configurable timeout (ADR 0032 default: 5000ms) — M3: clear timer on verdict arrival
+          const verdictTimeout = verif.timeoutMs ?? 5_000;
+          let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
+          const verdictResult = await Promise.race([
+            (async () => {
+              for await (const env of verdictSub.events) {
+                if (env.correlationId === verdictCorrId && env.kind === "verdict") {
+                  // M3: verdict arrived — clear the timeout so the event loop drains
+                  if (timeoutHandle !== undefined) clearTimeout(timeoutHandle);
+                  return env.verdict;
+                }
+              }
+              return null;
+            })(),
+            new Promise<null>((resolve) => {
+              timeoutHandle = setTimeout(() => resolve(null), verdictTimeout);
+            }),
+          ]);
+          verdictSub.close();
+
+          if (verdictResult) {
+            const verdictKind = (verdictResult as { kind?: string }).kind ?? "unknown";
+            // C3: ADR 0032 — inject for off_track, failed, AND partial (M9)
+            if (
+              verdictKind === "off-track" ||
+              verdictKind === "failed" ||
+              verdictKind === "partial"
+            ) {
+              // C3: ADR 0032 message format: "[Verification: ${kind}] ${rationale_or_suggestion}"
+              const rationale =
+                (verdictResult as { suggestion?: string; reason?: string; rationale?: string })
+                  .suggestion ??
+                (verdictResult as { suggestion?: string; reason?: string; rationale?: string })
+                  .reason ??
+                (verdictResult as { suggestion?: string; reason?: string; rationale?: string })
+                  .rationale ??
+                "Reconsider your approach.";
+              messages.push({
+                role: "user",
+                content: [
+                  {
+                    type: "text",
+                    text: `[Verification: ${verdictKind}] ${rationale}`,
+                  },
+                ],
+              });
+              console.log(
+                `[agent-runner:${this.id}] verification verdict=${verdictKind} — injecting correction`,
+              );
+            }
+          }
+        }
+      }
+      // --- end per-step verification ---
 
       // Check termination predicate
       if (spec.termination.done.kind === "tool_emitted") {
@@ -800,7 +816,81 @@ export class AgentRunner implements AgentHandle {
             continue;
           }
 
-          // Sandbox authorization
+          // C4: Enforce PermissionDescriptor.defaultMode BEFORE sandbox.run.
+          // "deny" → refuse immediately; "ask" → emit human.request and await reply/timeout.
+          // "auto" → pass through to sandbox authorization below.
+          const permDefaultMode = tool.spec.permission.defaultMode;
+          if (permDefaultMode === "deny") {
+            toolResultContents.push({
+              type: "tool_result",
+              toolCallId,
+              output: { error: `Permission denied for tool ${tc.name} (defaultMode: deny)` },
+              isError: true,
+            });
+            continue;
+          }
+
+          if (permDefaultMode === "ask") {
+            // Emit a human.request and block until human.reply or human.timeout (60s default)
+            await bus.send({
+              kind: "human.request",
+              correlationId,
+              sessionId,
+              from: this.id,
+              to: { kind: "broadcast" },
+              timestamp: Date.now(),
+              prompt: `Allow tool "${tc.name}"? ${tool.spec.permission.rationale}`,
+            });
+
+            const askTimeout = 60_000;
+            let askTimerHandle: ReturnType<typeof setTimeout> | undefined;
+            const humanSub = bus.subscribe(this.id, { kind: "self" });
+
+            const askOutcome = await Promise.race([
+              (async (): Promise<"allow" | "deny"> => {
+                for await (const env of humanSub.events) {
+                  if (schedState.abortController.signal.aborted) return "deny";
+                  if (env.correlationId !== correlationId) continue;
+                  if (env.kind === "human.reply") {
+                    if (askTimerHandle !== undefined) clearTimeout(askTimerHandle);
+                    const reply = env.reply;
+                    // Truthy string values ("yes", "allow", "true", "1") → allow
+                    const affirmative =
+                      typeof reply === "boolean"
+                        ? reply
+                        : typeof reply === "string"
+                          ? /^(yes|allow|true|1)$/i.test(reply.trim())
+                          : Boolean(reply);
+                    return affirmative ? "allow" : "deny";
+                  }
+                  if (env.kind === "human.timeout") {
+                    if (askTimerHandle !== undefined) clearTimeout(askTimerHandle);
+                    return "deny";
+                  }
+                }
+                return "deny";
+              })(),
+              new Promise<"deny">((resolve) => {
+                askTimerHandle = setTimeout(() => resolve("deny"), askTimeout);
+              }),
+            ]);
+            humanSub.close();
+
+            if (askOutcome === "deny") {
+              toolResultContents.push({
+                type: "tool_result",
+                toolCallId,
+                output: {
+                  error: `Permission denied for tool ${tc.name} (human denied or timeout)`,
+                },
+                isError: true,
+              });
+              continue;
+            }
+            // askOutcome === "allow" → fall through to sandbox authorization
+          }
+
+          // Sandbox authorization (sandbox-level effects check)
           const effects = tool.spec.permission.effects;
           let authorized = true;
           for (const effect of effects) {

@@ -35,6 +35,13 @@ export type { BuildAdjudicatorOptions, AdjudicatorBuild } from "./roles/adjudica
 export { buildPostmortem, defaultAnalyze } from "./roles/postmortem.js";
 export type { BuildPostmortemOptions, PostmortemBuild } from "./roles/postmortem.js";
 
+export { makeVerifierAgent } from "./roles/verifier.js";
+export type {
+  MakeVerifierAgentOptions,
+  VerifierAgentBuild,
+  VerdictRequestPayload,
+} from "./roles/verifier.js";
+
 export {
   BlueprintRegistry,
   assembleAgent,
