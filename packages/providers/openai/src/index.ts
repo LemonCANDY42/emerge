@@ -522,14 +522,16 @@ export class OpenAIProvider implements Provider {
           outputTokens * (this.capabilities.claimed.costPerMtokOut ?? 0)) /
         1_000_000;
 
+      // Tool calls take precedence: a Responses stream that emitted any
+      // function_call items must report stop reason "tool_use" so the agent
+      // runner actually invokes them. The status field on response.completed
+      // is "completed" regardless of whether tools were called.
       const stopReason: ProviderStopReason =
-        finishReason === "completed" || finishReason === "end_turn"
-          ? "end_turn"
+        callIdToName.size > 0
+          ? "tool_use"
           : finishReason === "max_output_tokens"
             ? "max_tokens"
-            : callIdToName.size > 0
-              ? "tool_use"
-              : "end_turn";
+            : "end_turn";
 
       yield {
         type: "stop",
