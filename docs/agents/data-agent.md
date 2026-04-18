@@ -43,7 +43,7 @@ Use available tools: query databases, read/write CSVs, transform JSON.`
     "fs.read",
     "fs.write",
     "sql.query",        // [planned: M3c2 via tools-mcp]
-    "memory.recall",
+    // "memory.recall",  // [planned: M5 — not yet available]
   ],
 
   memoryView: {

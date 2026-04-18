@@ -51,7 +51,7 @@ Be thorough. Do not make up data. When uncertain, say so.`
   // Tools
   toolsAllowed: [
     "fs.read",              // Read local documents
-    "memory.recall",        // Retrieve previous findings [planned: M5]
+    // "memory.recall",     // [planned: M5 — SimpleMemory.recall does not support filtering yet]
     // Add MCP tools for web search, API access
     // "web.search",        // [planned: M3c2 via tools-mcp]
     // "api.call",          // [planned: M3c2 via tools-mcp]
@@ -94,7 +94,7 @@ Be thorough. Do not make up data. When uncertain, say so.`
 
   // Advertised capabilities
   capabilities: {
-    tools: ["fs.read", "memory.recall"],
+    tools: ["fs.read"],
     modalities: ["text"],  // Text-only; no vision (yet)
     qualityTier: "standard",
     streaming: true,
@@ -251,7 +251,7 @@ if (result.ok) {
 | `budget.usd` | $0.5–$2.0 | Research tasks are inexpensive |
 | `maxIterations` | 10–15 | Multiple sources, multi-turn analysis |
 | `maxWallMs` | 300s–600s | Thorough reading > speed |
-| `toolsAllowed` | fs.read, memory.recall, web.* | Read-only focus |
+| `toolsAllowed` | fs.read, [web.* planned: M3c2] | Read-only focus |
 | `surveillance` | "passive" | Decompose on failure, don't assume strength |
 | `memoryView.inheritFromSupervisor` | true | Reuse findings from parent context |
 | `acl.acceptsRequests` | "any" (or restricted to supervisor) | If in a topology, restrict to supervisor |
@@ -292,31 +292,8 @@ if (handle.ok) await kernel.runAgent(handle.value);
 
 ## Links
 
-- **Contracts:**
-  - Agent spec: `packages/kernel/src/contracts/agent.ts` (lines 18–35 for core fields)
-  - Tool registry: `packages/kernel/src/contracts/tool.ts`
-  - Memory view: `packages/kernel/src/contracts/agent.ts` (lines 60–67)
-  - Surveillance: `packages/kernel/src/contracts/surveillance.ts`
-
-- **Implementations:**
-  - Role helpers: `packages/agents/src/roles/` (postmortem example; research is a simple spec)
-  - Topology builders: `packages/agents/src/topologies/supervisor-worker.ts`
-  - Tool registry: `packages/tools/src/`
-  - MCP bridge: `packages/tools-mcp/src/` ([planned: M3c2 for web/API])
-
-- **ADRs:**
-  - ADR 0011: Custodian role (optional for research, but recommended for multi-step tasks)
-  - ADR 0012: Adjudicator role (gate output quality)
-  - ADR 0030: Tool result projections (truncate large responses)
-  - ADR 0033: Truncation-aware tool results
-
-- **Examples:**
-  - `examples/hello-agent/src/index.ts` — Basic read + write demo (copy for research)
-  - `examples/hello-agent-anthropic/src/index.ts` — Real provider integration
-  - `examples/topology-supervisor-worker/src/index.ts` — Multi-agent with roles
-  - `examples/eval-probes/src/index.ts` — Surveillance in action (weak vs. strong model)
-
-- **Roadmap:**
-  - [planned: M3c2] Web search + API MCP tools
-  - [planned: M5] Durable memory (semantic recall of previous findings)
-  - [planned: M5] Experience library (learn from past research tasks)
+- `packages/kernel/src/contracts/agent.ts` — AgentSpec contract
+- `packages/agents/src/roles/postmortem.ts` — Role helper pattern
+- `examples/hello-agent-anthropic/src/index.ts` — Full integration example
+- ADR 0012: Adjudicator role (gate output quality)
+- [planned: M3c2] Web search + API MCP tools

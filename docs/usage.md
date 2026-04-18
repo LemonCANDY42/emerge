@@ -222,37 +222,43 @@ await kernel.runAgent(handle);
 The agent produces events on a **Bus**. Subscribe to them:
 
 ```typescript
-import type { BusEnvelope } from "@emerge/kernel/contracts";
+import type { AgentId, BusEnvelope, TopicId } from "@emerge/kernel/contracts";
 
 const bus = kernel.getBus();
 const sessionId = "my-session-id" as SessionId;
 
 // Subscribe to all messages from one agent
-const unsubscribe = bus.subscribe(
-  { kind: "agent", id: "my-agent" },
-  async (envelope: BusEnvelope) => {
-    console.log(`Message kind: ${envelope.kind}`);
-    if (envelope.kind === "delta") {
-      console.log("Output chunk:", envelope.chunk);
-    } else if (envelope.kind === "progress") {
-      console.log(`Progress: ${envelope.step} (${envelope.percent}%)`);
-    } else if (envelope.kind === "result") {
-      console.log("Final result:", envelope.payload);
-    } else if (envelope.kind === "verdict") {
-      console.log("Verdict:", envelope.verdict.kind);  // "aligned" | "partial" | "off-track" | "failed"
-    }
-  }
+const sub = bus.subscribe(
+  "my-agent" as AgentId,
+  { kind: "from", sender: "my-agent" as AgentId }
 );
 
-// Subscribe to a topic (broadcast by multiple agents)
-const unsubscribeTopic = bus.subscribe(
-  { kind: "topic", topic: "quota-requests" as TopicId },
-  async (envelope: BusEnvelope) => {
-    if (envelope.kind === "quota_request") {
-      console.log("Agent requesting quota:", envelope.payload);
-    }
+for await (const envelope of sub.events) {
+  console.log(`Message kind: ${envelope.kind}`);
+  if (envelope.kind === "delta") {
+    console.log("Output chunk:", envelope.chunk);
+  } else if (envelope.kind === "progress") {
+    console.log(`Progress: ${envelope.step} (${envelope.percent}%)`);
+  } else if (envelope.kind === "result") {
+    console.log("Final result:", envelope.payload);
+  } else if (envelope.kind === "verdict") {
+    console.log("Verdict:", envelope.verdict.kind);  // "aligned" | "partial" | "off-track" | "failed"
   }
+}
+sub.close();
+
+// Subscribe to a topic (broadcast by multiple agents)
+const topicSub = bus.subscribe(
+  "my-agent" as AgentId,
+  { kind: "topic", topic: "quota-requests" as TopicId }
 );
+
+for await (const envelope of topicSub.events) {
+  if (envelope.kind === "quota.request") {
+    console.log("Agent requesting quota:", envelope.request);
+  }
+}
+topicSub.close();
 ```
 
 **Envelope kinds** (the discriminated union):
@@ -268,15 +274,15 @@ const unsubscribeTopic = bus.subscribe(
 | `signal` | Host interrupts/pauses/resumes agent | `signal: "interrupt" \| "pause" \| "resume" \| "terminate"` |
 | `notification` | Informational message | `content: string` |
 | `handshake` | Agent advertises itself | `card: AgentCard` |
-| `quota_request` | Agent asks Custodian for budget | `request: QuotaRequest` |
-| `quota_decision` | Custodian grants/denies quota | `decision: QuotaDecision` |
-| `artifact_put` | Agent stores an artifact | `artifact: Artifact` |
-| `artifact_get` | Agent retrieves an artifact | `handle: ArtifactHandle` |
+| `quota.request` | Agent asks Custodian for budget | `request: QuotaRequest` |
+| `quota.grant` \| `quota.deny` \| `quota.partial` | Custodian grants/denies/partially grants quota | `decision: QuotaDecision` |
+| `artifact.put` | Agent stores an artifact | `bytesRef: string, mediaType: string, size: number` |
+| `artifact.get` | Agent retrieves an artifact | `handle: ArtifactHandle` |
 | `verdict` | Adjudicator evaluates output | `verdict: Verdict` |
-| `human_request` | Agent requests human approval | `request: HumanRequest` |
-| `human_reply` | Human grants/denies approval | `reply: HumanReply` |
-| `human_timeout` | Human approval timed out | `checkpoint: string` |
-| `experience_hint` | Surveillance suggests prior experiences | `hints: ExperienceMatch[]` |
+| `human.request` | Agent requests human approval | `prompt: string, options?: string[], schema?: unknown` |
+| `human.reply` | Human grants/denies approval | `reply: unknown` |
+| `human.timeout` | Human approval timed out | (no payload) |
+| `experience.hint` | Surveillance suggests prior experiences | `hints: ExperienceMatch[]` |
 
 ## Record and replay
 
@@ -332,22 +338,22 @@ When an agent finishes:
 const endResult = await kernel.endSession();
 
 if (endResult.ok) {
-  const { record, verdict } = endResult.value;
+  const { record, postmortemErrors } = endResult.value;
 
-  // Check the verdict (if Adjudicator was mounted)
-  if (verdict) {
-    console.log(`Verdict: ${verdict.kind}`);
-    // "aligned" | "partial" | "off-track" | "failed"
-    if (verdict.kind !== "aligned") {
-      console.log(`Reasoning: ${verdict.reasoning}`);
-      // Retry, escalate, or surface to human
+  // Check the record
+  if (record) {
+    console.log(`Session recorded: ${record.events.length} events`);
+
+    // Query cost totals
+    const cost = kernel.getCostMeter().ledger();
+    console.log(`Total USD: $${cost.totals.grand.toFixed(4)}`);
+    console.log(`Per agent:`, cost.totals.byAgent);
+
+    // Check for postmortem errors
+    if (postmortemErrors) {
+      console.log("Postmortem analysis errors:", postmortemErrors);
     }
   }
-
-  // Get cost totals
-  const cost = kernel.getCostMeter().ledger();
-  console.log(`Total USD: $${cost.totals.grand.toFixed(4)}`);
-  console.log(`Per agent:`, cost.byAgent);
 
   // Emit telemetry
   if (record) {
@@ -422,29 +428,40 @@ import { buildCustodian, buildAdjudicator } from "@emerge/agents";
 import type { Contract } from "@emerge/kernel/contracts";
 
 const contract: Contract = {
+  id: "essay-contract" as ContractId,
   goal: "Write a 5-paragraph essay on climate change",
-  acceptanceCriteria: "≥1500 words, cited sources, balanced tone",
-  // ... more fields
+  acceptanceCriteria: [
+    { kind: "predicate", description: "≥1500 words" },
+    { kind: "predicate", description: "Cited sources" },
+    { kind: "predicate", description: "Balanced tone" },
+  ],
+  inputs: [],
+  outputs: [{ name: "essay", schema: { "~standard": { version: 1, vendor: "mock", validate: (v) => ({ value: v }) } } }],
+  constraints: [],
+  hash: "abc123",
 };
 
 const custodian = buildCustodian({
   id: "custodian" as AgentId,
   contract,
   quotaPolicy: (req) => ({
-    granted: req.requested,  // grant all requests (demo only)
+    kind: "grant",
+    granted: req.ask,
+    rationale: "Grant all requests (demo only)",
   }),
 });
 
 const adjudicator = buildAdjudicator({
   id: "adjudicator" as AgentId,
   contract,
-  evaluate: (input) => {
+  evaluate: (input: EvaluationInput) => {
     // Check: is the output ≥1500 words?
-    const wordCount = input.output.split(/\s+/).length;
+    const text = typeof input.outputs.essay === "string" ? input.outputs.essay : JSON.stringify(input.outputs.essay);
+    const wordCount = text.split(/\s+/).length;
     if (wordCount < 1500) {
-      return { kind: "off-track", reasoning: `Only ${wordCount} words; need 1500+` };
+      return { kind: "off-track", reason: `Only ${wordCount} words; need 1500+`, suggestion: "Expand the essay" };
     }
-    return { kind: "aligned", reasoning: "Meets acceptance criteria" };
+    return { kind: "aligned", rationale: "Meets acceptance criteria", evidence: input.artifacts };
   },
 });
 
@@ -455,29 +472,46 @@ kernel.spawn(adjudicator.spec);
 ### Pattern 5: Postmortem analysis (session-over-session learning)
 
 ```typescript
-import { buildPostmortem } from "@emerge/agents";
-import type { SessionRecord } from "@emerge/kernel/contracts";
+import type { Postmortem, SessionRecord, Experience, ExperienceId } from "@emerge/kernel/contracts";
 
 class MyPostmortem implements Postmortem {
-  async analyze(record: SessionRecord) {
-    return {
-      ok: true,
-      value: [
-        {
-          id: `exp-${record.sessionId}` as ExperienceId,
-          approach: "supervisor-decomposition",
-          problemSignature: "multi-step research task",
-          solutions: [
-            {
-              decision: "spawn 3 workers in parallel",
-              outcome: "completed in 2 minutes",
-              costUsd: 0.15,
-            }
-          ],
-          metadata: { timestamp: Date.now() },
-        }
-      ]
-    };
+  async analyze(record: SessionRecord): Promise<Result<readonly Experience[]>> {
+    const experiences: Experience[] = [];
+    
+    // Analyze the session record to extract lessons
+    const successfulEnvelopes = record.events.filter(
+      e => e.kind === "envelope" && (e as any).envelope.kind === "result"
+    );
+
+    if (successfulEnvelopes.length > 0) {
+      experiences.push({
+        id: `exp-${record.sessionId}` as ExperienceId,
+        taskType: "multi-step-research",
+        approachFingerprint: "supervisor-decomposition",
+        description: "Multi-agent decomposition with parallel workers",
+        optimizedTopology: {
+          kind: "supervisor-worker",
+          config: { dispatch: "parallel" },
+        },
+        decisionLessons: [
+          {
+            stepDescription: "Spawn worker pool",
+            chosen: "Parallel execution",
+            worked: true,
+          }
+        ],
+        outcomes: {
+          aligned: true,
+          cost: 0.15,
+          wallMs: 120000,
+        },
+        evidence: [],
+        provenance: { sourceSessions: [record.sessionId] },
+        schemaVersion: "1.0",
+      });
+    }
+
+    return { ok: true, value: experiences };
   }
 }
 
@@ -495,17 +529,20 @@ Key types to import:
 ```typescript
 import type {
   AgentId, AgentSpec, AgentHandle,
-  SessionId, BusEnvelope,
+  SessionId, ContractId, BusEnvelope,
   Budget, TerminationPolicy,
-  ProviderRouting,
+  ProviderRouting, Result,
   SurveillanceProfile,
-  Verdict,
+  Verdict, EvaluationInput,
   QuotaRequest, QuotaDecision,
+  Contract, Experience, ExperienceId,
+  Postmortem,
 } from "@emerge/kernel/contracts";
 
-import { Kernel, anthropicAdapter } from "@emerge/kernel/runtime";
+import { Kernel } from "@emerge/kernel/runtime";
 import { MockProvider } from "@emerge/provider-mock";
 import { CalibratedSurveillance } from "@emerge/surveillance";
+import { buildCustodian, buildAdjudicator } from "@emerge/agents";
 ```
 
 ## What's next?

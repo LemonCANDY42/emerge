@@ -32,52 +32,49 @@ All providers implement this interface. Kernel routes calls per-agent spec.
 ```typescript
 interface Provider {
   readonly capabilities: ProviderCapabilities;
-  
-  call(input: ProviderInput): Promise<ProviderOutput>;
+  invoke(req: ProviderRequest): AsyncIterable<ProviderEvent>;
+  countTokens(messages: readonly ProviderMessage[]): Promise<Result<number>>;
 }
 
 interface ProviderCapabilities {
   readonly id: ProviderId;  // "anthropic" | "openai" | "mock" | custom
+  readonly claimed: ClaimedCapabilities;
+  readonly observed?: ObservedCapabilities;
+}
+
+interface ClaimedCapabilities {
   readonly contextWindow: number;  // e.g., 200000
-  readonly nativeTools: boolean;  // true if supports tool_use natively
+  readonly maxOutputTokens: number;
+  readonly nativeToolUse: boolean;
+  readonly streamingToolUse: boolean;
   readonly vision: boolean;
-  readonly thinking: boolean;  // supported in M3c2+
-  readonly streaming: boolean;
-  readonly costPer1MTokensIn?: number;  // e.g., 3.0
-  readonly costPer1MTokensOut?: number;  // e.g., 15.0
-  readonly latency?: "interactive" | "batch";
-  readonly observed?: {
-    probeSuccessRate?: number;  // [0, 1] from calibration
-    // ... more fields from surveillance.ts
-  };
+  readonly audio: boolean;
+  readonly thinking: boolean;
+  readonly latencyTier: "interactive" | "batch";
+  readonly costPerMtokIn?: number;  // e.g., 3.0
+  readonly costPerMtokOut?: number;  // e.g., 15.0
 }
 
-interface ProviderInput {
-  messages: Message[];
-  tools?: Tool[];
-  system?: string;
-  // ... model-specific config
-}
-
-interface ProviderOutput {
-  events: ProviderEvent[];  // discriminated union of streaming events
+interface ProviderRequest {
+  readonly messages: readonly ProviderMessage[];
+  readonly tools?: readonly ProviderToolSpec[];
+  readonly maxOutputTokens?: number;
+  readonly temperature?: number;
+  readonly stopSequences?: readonly string[];
+  readonly hint?: string;
+  readonly signal?: AbortSignal;
 }
 
 type ProviderEvent =
   | { type: "text_delta"; text: string }
+  | { type: "thinking_delta"; text: string }
   | { type: "tool_call_start"; toolCallId: string; name: string }
   | { type: "tool_call_input_delta"; toolCallId: string; partial: string }
   | { type: "tool_call_end"; toolCallId: string }
-  | { type: "stop"; reason: "end_turn" | "tool_use" | "max_tokens"; usage: Usage }
-  | { type: "error"; error: string };
+  | { type: "stop"; reason: ProviderStopReason; usage: BudgetUsage }
+  | { type: "error"; error: ContractError };
 
-interface Usage {
-  tokensIn: number;
-  tokensOut: number;
-  wallMs: number;
-  toolCalls: number;
-  usd: number;
-}
+type ProviderStopReason = "end_turn" | "max_tokens" | "stop_sequence" | "tool_use" | "refusal" | "error";
 ```
 
 **Implementations:**
@@ -98,11 +95,10 @@ interface Tool {
   readonly execute: (input: unknown, context: ToolExecutionContext) => Promise<ToolResult>;
 }
 
-interface ToolResult {
+type ToolResult =
   | { kind: "success"; output: unknown; handle?: ToolResultHandle }
   | { kind: "error"; error: string; code?: string; retriable?: boolean }
-  | { kind: "truncated"; preview: string; size: number; handle: ToolResultHandle }
-}
+  | { kind: "truncated"; preview: string; size: number; handle: ToolResultHandle };
 
 interface ToolResultHandle {
   id: string;  // opaque key for lazy-loading full result
@@ -161,26 +157,29 @@ type Address =
 | `signal` | Control flow | `signal: "interrupt" \| "pause" \| "resume" \| "terminate", reason?` | host | agent |
 | `notification` | Info only | `content: string` | any | any |
 | `handshake` | Agent advertisement | `card: AgentCard` | agent | broadcast |
-| `quota_request` | Budget request | `request: QuotaRequest` | agent | custodian (routed) |
-| `quota_decision` | Budget grant | `decision: QuotaDecision` | custodian | agent |
-| `artifact_put` | Store artifact | `artifact: Artifact` | agent | artifact store |
-| `artifact_get` | Retrieve artifact | `handle: ArtifactHandle` | agent | artifact store |
+| `quota.request` | Budget request | `request: QuotaRequest` | agent | custodian (routed) |
+| `quota.grant` \| `quota.deny` \| `quota.partial` | Budget decision | `decision: QuotaDecision` | custodian | agent |
+| `artifact.put` | Store artifact | `bytesRef: string, mediaType: string, size: number` | agent | artifact store |
+| `artifact.get` | Retrieve artifact | `handle: ArtifactHandle` | agent | artifact store |
 | `verdict` | Evaluation result | `verdict: Verdict` | adjudicator | broadcast |
-| `human_request` | Approval needed | `request: HumanRequest` | agent | host |
-| `human_reply` | Approval granted | `reply: HumanReply` | host | agent |
-| `human_timeout` | Approval timed out | `checkpoint: string` | host | agent |
-| `experience_hint` | Learning hint | `hints: ExperienceMatch[]` | surveillance | agent |
+| `human.request` | Approval needed | `prompt: string, options?: string[], schema?: unknown` | agent | host |
+| `human.reply` | Approval granted | `reply: unknown` | host | agent |
+| `human.timeout` | Approval timed out | (no payload) | host | agent |
+| `experience.hint` | Learning hint | `hints: ExperienceMatch[]` | surveillance | agent |
 
 **Subscribe to bus:**
 ```typescript
-const unsubscribe = bus.subscribe(
-  { kind: "agent", id: "my-agent" },
-  async (envelope: BusEnvelope) => {
-    if (envelope.kind === "result") {
-      console.log(envelope.payload);
-    }
-  }
+const sub = bus.subscribe(
+  "my-agent" as AgentId,
+  { kind: "from", sender: "my-agent" as AgentId }
 );
+
+for await (const envelope of sub.events) {
+  if (envelope.kind === "result") {
+    console.log(envelope.payload);
+  }
+}
+sub.close();
 ```
 
 ## AgentSpec fields
@@ -309,21 +308,30 @@ if (probes.ok) {
 
 ## Cost meter API
 
-**File:** `packages/kernel/src/contracts/cost.ts`
+**File:** `packages/kernel/src/contracts/cost.ts` (lines 37–48)
 
 Track USD per agent, per task.
 
 ```typescript
 interface CostMeter {
-  recordCall(agentId: AgentId, usd: number): void;
+  record(entry: Omit<CostLedgerEntry, "at"> & { readonly at?: number }): void;
   ledger(): CostLedger;
-  forecast(step: StepProfile): number;  // Estimated USD for next step
+  forecast(input: CostForecastInput): CostForecast;
 }
 
 interface CostLedger {
-  byAgent: Record<AgentId, AgentCost>;
-  byTask: Record<TaskId, TaskCost>;
-  totals: { tokensIn: number; tokensOut: number; grand: number };
+  readonly entries: readonly CostLedgerEntry[];
+  readonly totals: {
+    readonly byAgent: Readonly<Record<AgentId, number>>;
+    readonly byContract: Readonly<Record<ContractId, number>>;
+    readonly grand: number;
+  };
+}
+
+interface CostForecast {
+  readonly p50: number;
+  readonly p95: number;
+  readonly basis: "experience" | "heuristic" | "provider-quote";
 }
 ```
 
@@ -332,28 +340,32 @@ interface CostLedger {
 const meter = kernel.getCostMeter();
 const ledger = meter.ledger();
 console.log(`Total: $${ledger.totals.grand.toFixed(4)}`);
-console.log(`Agent: $${ledger.byAgent["my-agent"].usd.toFixed(4)}`);
+console.log(`Per agent:`, ledger.totals.byAgent);
 ```
 
 ## Replay / Recorder API
 
-**File:** `packages/kernel/src/contracts/replay.ts`
+**File:** `packages/kernel/src/contracts/replay.ts` (lines 16–75)
 
 Record and deterministically replay sessions.
 
 ```typescript
-interface Recorder {
-  setSession(sessionId: SessionId, contractId: ContractId): void;
-  record(envelope: BusEnvelope): void;
-  export(): SessionRecord;  // or write to disk
-}
-
 interface SessionRecord {
   readonly sessionId: SessionId;
-  readonly contractId: ContractId;
   readonly startedAt: number;
-  readonly events: BusEnvelope[];
+  readonly endedAt?: number;
+  readonly contractRef: ContractId;
+  readonly events: readonly RecordedEvent[];
+  readonly schemaVersion: string;
 }
+
+type RecordedEvent =
+  | { readonly kind: "envelope"; readonly at: number; readonly envelope: BusEnvelope }
+  | { readonly kind: "provider_call"; readonly at: number; readonly req: ProviderRequest; readonly events: readonly ProviderEvent[] }
+  | { readonly kind: "tool_call"; readonly at: number; readonly call: ToolInvocation; readonly result: ToolResult }
+  | { readonly kind: "surveillance_recommendation"; readonly at: number; readonly input: AssessmentInput; readonly recommendation: Recommendation }
+  | { readonly kind: "decision"; readonly at: number; readonly agent: AgentId; readonly choice: string; readonly rationale: string }
+  | { readonly kind: "lifecycle"; readonly at: number; readonly agent: AgentId; readonly transition: AgentState };
 ```
 
 **Usage:**
@@ -376,31 +388,37 @@ kernel = new Kernel({ reproducibility: "record-replay" }, { replayer });
 
 ## Standard Schema
 
-**File:** `packages/kernel/src/contracts/common.ts` (imports)
+**File:** `packages/kernel/src/contracts/common.ts` (lines 29–50)
 
 All tool input/output and blueprint slot constraints use **Standard Schema** — vendor-agnostic schema refs compatible with Zod, Valibot, ArkType.
 
 ```typescript
-type SchemaRef =
-  | { kind: "zod"; schema: any }
-  | { kind: "valibot"; schema: any }
-  | { kind: "arktype"; schema: any }
-  | { kind: "json-schema"; schema: unknown };
+interface StandardSchemaV1<Input = unknown, Output = Input> {
+  readonly "~standard": {
+    readonly version: 1;
+    readonly vendor: string;
+    readonly validate: (
+      value: unknown,
+    ) => StandardSchemaResult<Output> | Promise<StandardSchemaResult<Output>>;
+    readonly types?: { readonly input: Input; readonly output: Output };
+  };
+}
+
+type SchemaRef<I = unknown, O = I> = StandardSchemaV1<I, O>;
 ```
 
 See ADR 0025 for rationale.
 
 ## OpenTelemetry + W3C Trace Context
 
-**File:** `packages/kernel/src/contracts/telemetry.ts`
+**File:** `packages/kernel/src/contracts/common.ts` (lines 56–59)
 
 Every envelope carries optional `TraceContext` for distributed tracing.
 
 ```typescript
 interface TraceContext {
-  traceId: string;  // W3C format
-  spanId: string;
-  parent?: string;
+  readonly traceparent: string;  // W3C format per https://www.w3.org/TR/trace-context/
+  readonly tracestate?: string;
 }
 ```
 
@@ -443,7 +461,7 @@ import type {
   SessionRecord,
 } from "@emerge/kernel/contracts";
 
-import { Kernel, anthropicAdapter } from "@emerge/kernel/runtime";
+import { Kernel } from "@emerge/kernel/runtime";
 ```
 
 ## See also

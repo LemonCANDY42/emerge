@@ -126,14 +126,12 @@ const workerSpec: AgentSpec = {
 import { supervisorWorker } from "@emerge/agents";
 
 async function runOrchestratedTask(goal: string) {
-  const kernel = new Kernel({ mode: "auto", reproducibility: "free" }, {});
+  const runtimeKernel = new Kernel({ mode: "auto", reproducibility: "free" }, {});
   const provider = new AnthropicProvider();
-  kernel.mountProvider(provider);
+  runtimeKernel.mountProvider(provider);
 
   const sessionId = `project-${Date.now()}` as SessionId;
-  kernel.setSession(sessionId, "project-contract");
-
-  const kernel: KernelLike = kernel;  // Implement KernelLike if not directly using Kernel
+  runtimeKernel.setSession(sessionId, "project-contract" as ContractId);
 
   const topology = supervisorWorker({
     supervisor: orchestratorSpec,
@@ -149,10 +147,10 @@ async function runOrchestratedTask(goal: string) {
     },
   });
 
-  const result = await topology.run(goal, kernel, sessionId);
+  const result = await topology.run(goal, runtimeKernel, sessionId);
   if (result.ok) {
     console.log("Project output:", result.value);
-    const cost = kernel.getCostMeter().ledger();
+    const cost = runtimeKernel.getCostMeter().ledger();
     console.log(`Total cost: $${cost.totals.grand.toFixed(4)}`);
   } else {
     console.error("Project failed:", result.error);
@@ -198,14 +196,21 @@ async function runOrchestratedTask(goal: string) {
 ```typescript
 const topology = supervisorWorker({
   supervisor: {
-    id: "sup",
+    id: "sup" as AgentId,
     role: "supervisor",
     provider: { kind: "static", providerId: "mock" },
     system: { kind: "literal", text: "Decompose and coordinate." },
     toolsAllowed: ["bus.send"],
     memoryView: { inheritFromSupervisor: false, writeTags: [] },
     budget: { tokensIn: 30_000, tokensOut: 5_000, usd: 0.5 },
-    termination: { maxIterations: 5, maxWallMs: 1_800_000, done: { kind: "predicate", description: "end_turn" } },
+    termination: {
+      maxIterations: 5,
+      maxWallMs: 1_800_000,
+      budget: { tokensIn: 30_000, tokensOut: 5_000, wallMs: 1_800_000 },
+      retry: { transient: 2, nonRetryable: 0 },
+      cycle: { windowSize: 3, repeatThreshold: 1 },
+      done: { kind: "predicate", description: "end_turn" }
+    },
     acl: { acceptsRequests: "any", acceptsQueries: "any", acceptsSignals: "any", acceptsNotifications: "any" },
     capabilities: { tools: ["bus.send"], modalities: ["text"], qualityTier: "standard", streaming: true, interrupts: true, maxConcurrency: 1 },
     lineage: { depth: 0 },

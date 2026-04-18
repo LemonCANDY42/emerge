@@ -68,22 +68,31 @@ import { buildAdjudicator } from "@emerge/agents";
 import type { EvaluationInput, Verdict, Contract } from "@emerge/kernel/contracts";
 
 const contract: Contract = {
+  id: "essay-contract" as ContractId,
   goal: "Write a 3-page essay on climate policy",
-  acceptanceCriteria: "≥2000 words, ≥3 cited sources, clear thesis",
-  // ... more fields
+  acceptanceCriteria: [
+    { kind: "predicate", description: "≥2000 words" },
+    { kind: "predicate", description: "≥3 cited sources" },
+    { kind: "predicate", description: "Clear thesis" },
+  ],
+  inputs: [],
+  outputs: [{ name: "essay", schema: { "~standard": { version: 1, vendor: "mock", validate: (v) => ({ value: v }) } } }],
+  constraints: [],
+  hash: "abc123",
 };
 
 const adjudicator = buildAdjudicator({
-  id: "critic-1",
+  id: "critic-1" as AgentId,
   contract,
   evaluate: (input: EvaluationInput): Verdict => {
-    const output = typeof input.output === "string" ? input.output : JSON.stringify(input.output);
+    const output = typeof input.outputs.essay === "string" ? input.outputs.essay : JSON.stringify(input.outputs.essay);
     const wordCount = output.split(/\s+/).length;
 
     if (wordCount < 2000) {
       return {
         kind: "off-track",
-        reasoning: `Only ${wordCount} words; need ≥2000`,
+        reason: `Only ${wordCount} words; need ≥2000`,
+        suggestion: "Expand the essay to at least 2000 words",
       };
     }
 
@@ -91,50 +100,68 @@ const adjudicator = buildAdjudicator({
     if (!hasCitations) {
       return {
         kind: "off-track",
-        reasoning: "No citations found",
+        reason: "No citations found",
+        suggestion: "Add citations from credible sources",
       };
     }
 
     return {
       kind: "aligned",
-      reasoning: `Output meets criteria: ${wordCount} words, citations present`,
+      rationale: `Output meets criteria: ${wordCount} words, citations present`,
+      evidence: input.artifacts,
     };
   },
-  resultSenders: ["essay-writer"],  // Watch these agents' results
 });
 
 const kernel = new Kernel(
   {
     mode: "auto",
-    roles: { adjudicator: adjudicator.spec },  // Register
+    roles: { adjudicator: "critic-1" as AgentId },  // Register the adjudicator ID
   },
   {}
 );
 
 // Mount producer + adjudicator
-await kernel.spawn(producerSpec);
-await kernel.spawn(adjudicator.spec);
+const producerHandle = await kernel.spawn(producerSpec);
+if (!producerHandle.ok) {
+  console.error("Spawn producer failed:", producerHandle.error);
+  process.exit(1);
+}
+
+const adjHandle = await kernel.spawn(adjudicator.spec);
+if (!adjHandle.ok) {
+  console.error("Spawn adjudicator failed:", adjHandle.error);
+  process.exit(1);
+}
 
 // Subscribe to verdicts
 const bus = kernel.getBus();
-bus.subscribe(
-  { kind: "agent", id: "critic-1" },
-  async (envelope) => {
-    if (envelope.kind === "verdict") {
-      console.log(`Verdict: ${envelope.verdict.kind} — ${envelope.verdict.reasoning}`);
-    }
-  }
+const verdictSub = bus.subscribe(
+  "critic-1" as AgentId,
+  { kind: "from", sender: "critic-1" as AgentId, kinds: ["verdict"] }
 );
 
+const verdictTask = (async () => {
+  for await (const envelope of verdictSub.events) {
+    if (envelope.kind === "verdict") {
+      console.log(`Verdict: ${envelope.verdict.kind}`);
+      if (envelope.verdict.kind === "off-track") {
+        console.log(`Reason: ${(envelope.verdict as any).reason}`);
+      }
+    }
+  }
+})();
+
 // Run the producer
-await kernel.runAgent(producerHandle);
+await kernel.runAgent(producerHandle.value);
 
 // End session: kernel waits for "aligned" verdict before marking complete
 const endResult = await kernel.endSession();
-if (endResult.ok && endResult.value.verdict?.kind === "aligned") {
-  console.log("Session accepted");
+if (endResult.ok) {
+  console.log("Session ended");
+  verdictSub.close();
 } else {
-  console.log("Session rejected or retry needed");
+  console.error("Session end failed:", endResult.error);
 }
 ```
 
@@ -152,56 +179,66 @@ if (endResult.ok && endResult.value.verdict?.kind === "aligned") {
 
 ## Verdict kinds
 
+**File:** `packages/kernel/src/contracts/adjudicator.ts` (lines 25–37)
+
 ```typescript
 type Verdict =
-  | { kind: "aligned"; reasoning: string }
-  | { kind: "partial"; reasoning: string; remediation?: string }
-  | { kind: "off-track"; reasoning: string; remediation?: string }
-  | { kind: "failed"; reasoning: string };
+  | { kind: "aligned"; rationale: string; evidence: readonly ArtifactHandle[] }
+  | { kind: "partial"; missing: readonly AcceptanceCriterion[]; suggestion: string }
+  | { kind: "off-track"; reason: string; suggestion: string }
+  | { kind: "failed"; reason: string };
 ```
 
 - **aligned**: output meets all acceptance criteria. Session completes.
-- **partial**: mostly OK, but missing some criteria. Kernel may retry or surface to human (depends on policy).
-- **off-track**: significant gaps. Kernel retries or escalates.
-- **failed**: unacceptable. Kernel halts unless in "trust mode".
+- **partial**: mostly OK, but missing some criteria. List the missing criteria and suggest how to address them.
+- **off-track**: significant gaps. Provide reason and actionable suggestion.
+- **failed**: unacceptable. Kernel halts unless trustMode is set.
 
 ## Common patterns
 
 ### Pattern 1: Simple yes/no evaluation
 
 ```typescript
-evaluate: (input) => {
-  const passed = input.output === "expected-value";
+evaluate: (input: EvaluationInput): Verdict => {
+  const passed = input.outputs.result === "expected-value";
   return passed
-    ? { kind: "aligned", reasoning: "Matches expected output" }
-    : { kind: "failed", reasoning: "Mismatch" };
+    ? { kind: "aligned", rationale: "Matches expected output", evidence: input.artifacts }
+    : { kind: "failed", reason: "Output does not match expected value" };
 }
 ```
 
 ### Pattern 2: Word count + citation check
 
 ```typescript
-evaluate: (input) => {
-  const output = String(input.output);
+evaluate: (input: EvaluationInput): Verdict => {
+  const output = String(input.outputs.essay || "");
   const words = output.split(/\s+/).length;
   const citations = (output.match(/\[\d+\]/g) || []).length;
 
-  if (words < 1500) return { kind: "off-track", reasoning: `${words} words < 1500` };
-  if (citations < 3) return { kind: "partial", reasoning: `${citations} citations < 3` };
-  return { kind: "aligned", reasoning: "Meets all criteria" };
+  if (words < 1500) {
+    return { kind: "off-track", reason: `${words} words < 1500`, suggestion: "Expand to at least 1500 words" };
+  }
+  if (citations < 3) {
+    return { kind: "partial", missing: [], suggestion: `Only ${citations} citations; need ≥3` };
+  }
+  return { kind: "aligned", rationale: "Meets all criteria", evidence: input.artifacts };
 }
 ```
 
 ### Pattern 3: Test suite pass/fail
 
 ```typescript
-evaluate: async (input) => {
-  const testResult = input.metadata?.testOutput;
-  if (!testResult) return { kind: "off-track", reasoning: "No test results" };
-  if (testResult.exitCode === 0) {
-    return { kind: "aligned", reasoning: "All tests pass" };
+evaluate: async (input: EvaluationInput): Promise<Verdict> => {
+  // Look for test output in the results
+  const testOutput = input.outputs.testOutput;
+  if (!testOutput) {
+    return { kind: "off-track", reason: "No test results produced", suggestion: "Run the test suite first" };
+  }
+  const result = typeof testOutput === "string" ? JSON.parse(testOutput) : testOutput;
+  if (result.exitCode === 0) {
+    return { kind: "aligned", rationale: "All tests pass", evidence: input.artifacts };
   } else {
-    return { kind: "failed", reasoning: `Tests failed: ${testResult.stderr}` };
+    return { kind: "failed", reason: `Tests failed with exit code ${result.exitCode}` };
   }
 }
 ```
@@ -221,14 +258,24 @@ evaluate: async (input) => {
 ## Minimal invocation
 
 ```typescript
+import type { ContractId, AgentId } from "@emerge/kernel/contracts";
+
 const adj = buildAdjudicator({
-  id: "critic",
-  contract: { goal: "Write an essay", acceptanceCriteria: "≥500 words" },
+  id: "critic" as AgentId,
+  contract: {
+    id: "test-contract" as ContractId,
+    goal: "Write an essay",
+    acceptanceCriteria: [{ kind: "predicate", description: "≥500 words" }],
+    inputs: [],
+    outputs: [{ name: "essay", schema: { "~standard": { version: 1, vendor: "mock", validate: (v) => ({ value: v }) } } }],
+    constraints: [],
+    hash: "123",
+  },
   evaluate: (input) => {
-    const len = String(input.output).length;
+    const len = String(input.outputs.essay || "").length;
     return len >= 500
-      ? { kind: "aligned", reasoning: "Long enough" }
-      : { kind: "off-track", reasoning: `Only ${len} chars` };
+      ? { kind: "aligned", rationale: "Long enough", evidence: input.artifacts }
+      : { kind: "off-track", reason: `Only ${len} chars`, suggestion: "Write more" };
   },
 });
 

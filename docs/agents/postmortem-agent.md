@@ -22,30 +22,46 @@ class MyPostmortem implements Postmortem {
     // Given a session record, extract lessons
     const experiences: Experience[] = [];
 
-    // 1. Find what worked
-    const successfulApproaches = record.events
-      .filter(e => e.kind === "progress" && "step" in e && e.step?.includes("success"))
-      .map(e => ({ approach: String((e as any).step), outcome: "success" }));
+    // 1. Find what worked (progress envelopes)
+    const progressEnvelopes = record.events
+      .filter(e => e.kind === "envelope" && (e as any).envelope.kind === "progress")
+      .map(e => (e as any).envelope);
 
-    // 2. Find what failed
-    const failedApproaches = record.events
-      .filter(e => e.kind === "verdict" && "verdict" in e && (e as any).verdict.kind !== "aligned")
-      .map(e => ({ approach: String((e as any).step), outcome: "failed" }));
+    // 2. Find verdicts
+    const verdictEnvelopes = record.events
+      .filter(e => e.kind === "envelope" && (e as any).envelope.kind === "verdict")
+      .map(e => (e as any).envelope);
+
+    const hasAlignedVerdict = verdictEnvelopes.some(e => e.verdict.kind === "aligned");
 
     // 3. Combine into Experience
-    if (successfulApproaches.length > 0) {
+    if (progressEnvelopes.length > 0 || verdictEnvelopes.length > 0) {
       experiences.push({
         id: `exp-${record.sessionId}` as ExperienceId,
-        approach: successfulApproaches[0].approach,
-        problemSignature: "multi-agent-decomposition",
-        solutions: [
+        taskType: "multi-agent-decomposition",
+        approachFingerprint: "supervisor-worker-topology",
+        description: "Decomposition with parallel workers was effective",
+        optimizedTopology: {
+          kind: "supervisor-worker",
+          supervisor: { id: "supervisor" as AgentId, role: "supervisor" },
+          workers: [],
+          dispatch: "parallel",
+        },
+        decisionLessons: [
           {
-            decision: "Use supervisor/worker topology",
-            outcome: successfulApproaches[0].outcome,
-            costUsd: 5.0,  // From cost ledger
+            stepDescription: "Use parallel worker topology",
+            chosen: "parallel",
+            worked: hasAlignedVerdict,
           }
         ],
-        metadata: { timestamp: record.startedAt },
+        outcomes: {
+          aligned: hasAlignedVerdict,
+          cost: 5.0,
+          wallMs: Date.now() - record.startedAt,
+        },
+        evidence: [],
+        provenance: { sourceSessions: [record.sessionId] },
+        schemaVersion: "1.0",
       });
     }
 
@@ -57,52 +73,69 @@ class MyPostmortem implements Postmortem {
 ## SDK integration (emerge-as-client)
 
 ```typescript
-import { buildPostmortem } from "@emerge/agents";
-import type { SessionRecord, Experience, ExperienceId } from "@emerge/kernel/contracts";
+import type { Postmortem, SessionRecord, Experience, ExperienceId, AgentId } from "@emerge/kernel/contracts";
 
-const myPostmortem = buildPostmortem({
-  analyze: async (record: SessionRecord): Promise<Experience[]> => {
+const myPostmortem: Postmortem = {
+  analyze: async (record: SessionRecord): Promise<Result<readonly Experience[]>> => {
     const experiences: Experience[] = [];
 
-    // Analyze the session record
-    const tokenCost = record.events
-      .filter(e => e.kind === "delta" || e.kind === "result")
-      .reduce((sum, e) => sum + 1, 0);  // Simplified; real: parse usage
+    // Analyze the session record to extract lessons
+    const envelopes = record.events
+      .filter(e => e.kind === "envelope")
+      .map(e => (e as any).envelope);
+
+    const resultEnvelopes = envelopes.filter(e => e.kind === "result");
+    const verdictEnvelopes = envelopes.filter(e => e.kind === "verdict");
 
     // Extract a lesson
-    experiences.push({
-      id: `exp-${record.sessionId}` as ExperienceId,
-      approach: "divide-and-conquer",
-      problemSignature: `task-type-${record.contractId}`,
-      solutions: [
-        {
-          decision: "Spawn 5 parallel workers",
-          outcome: "success",
-          costUsd: record.costLedger?.totals.grand ?? 0,
-        }
-      ],
-      metadata: {
-        timestamp: record.startedAt,
-        duration: Date.now() - record.startedAt,
-        sessionId: record.sessionId,
-      },
-    });
+    if (resultEnvelopes.length > 0 || verdictEnvelopes.length > 0) {
+      experiences.push({
+        id: `exp-${record.sessionId}` as ExperienceId,
+        taskType: "divide-and-conquer",
+        approachFingerprint: "parallel-worker-decomposition",
+        description: "Spawning 5 parallel workers proved effective",
+        optimizedTopology: {
+          kind: "supervisor-worker",
+          supervisor: { id: "supervisor" as AgentId, role: "supervisor" },
+          workers: [],
+          dispatch: "parallel",
+        },
+        decisionLessons: [
+          {
+            stepDescription: "Use parallel workers for large tasks",
+            chosen: "parallel-workers",
+            worked: true,
+          }
+        ],
+        outcomes: {
+          aligned: verdictEnvelopes.some(e => e.verdict.kind === "aligned"),
+          cost: 0.25,  // Estimate from tokens/usage
+          wallMs: (record.endedAt ?? Date.now()) - record.startedAt,
+        },
+        evidence: [],
+        provenance: { sourceSessions: [record.sessionId] },
+        schemaVersion: "1.0",
+      });
+    }
 
-    return experiences;
+    return { ok: true, value: experiences };
   },
-});
+};
 
 const kernel = new Kernel({ ... }, {});
 kernel.mountPostmortem(myPostmortem);
 
 // Run a session
+const sessionId = `session-${Date.now()}` as SessionId;
 kernel.setSession(sessionId, contractId);
 await kernel.spawn(agentSpec);
 await kernel.runAgent(handle);
 
 // On endSession(), postmortem is auto-invoked if ExperienceLibrary is also mounted
 const endResult = await kernel.endSession();
-// The experience is now stored in the library for future sessions to query
+if (endResult.ok) {
+  console.log("Session ended; postmortem analyzed lessons");
+}
 ```
 
 ## Experience library
@@ -121,8 +154,9 @@ const ingestResult = await library.ingest(experience);
 
 // Future agents query hints before running
 const hintQuery: HintQuery = {
-  problemSignature: "multi-agent-task",
-  contextSummary: "Decompose large goal into sub-tasks",
+  approachFingerprint: "supervisor-decomposition",
+  taskType: "multi-agent-task",
+  description: "Decompose large goal into sub-tasks",
 };
 const hintBudget: HintBudget = { maxItems: 3, maxTokens: 1000 };
 const hints = await library.hint(hintQuery, hintBudget);
@@ -150,67 +184,96 @@ const recommendation = await surveillance.assess({
 ### Pattern 1: Extract decision lessons
 
 ```typescript
-async analyze(record: SessionRecord): Promise<Experience[]> {
-  const decisions: DecisionLesson[] = record.events
-    .filter(e => e.kind === "progress" && "step" in e)
-    .map(e => ({
-      decision: String((e as any).step),
-      outcome: "success",  // or detect from verdict
-    }));
+async analyze(record: SessionRecord): Promise<Result<readonly Experience[]>> {
+  const envelopes = record.events
+    .filter(e => e.kind === "envelope")
+    .map(e => (e as any).envelope);
 
-  return [{
-    id: `exp-${record.sessionId}`,
-    approach: "supervisor-worker",
-    problemSignature: record.contractId,
-    solutions: decisions,
-    metadata: { timestamp: Date.now() },
-  }];
+  const progressEnvelopes = envelopes.filter(e => e.kind === "progress");
+
+  const decisionLessons = progressEnvelopes.map((pe, idx) => ({
+    stepDescription: pe.step ?? `Step ${idx}`,
+    chosen: pe.currentTool ?? "unknown",
+    worked: true,  // Infer from later verdicts if needed
+  }));
+
+  return { ok: true, value: [{
+    id: `exp-${record.sessionId}` as ExperienceId,
+    taskType: "supervisor-worker",
+    approachFingerprint: record.contractRef,
+    description: "Multi-step task with progress tracking",
+    optimizedTopology: { kind: "supervisor-worker", config: { dispatch: "parallel" } },
+    decisionLessons,
+    outcomes: { aligned: true, cost: 0.5, wallMs: (record.endedAt ?? Date.now()) - record.startedAt },
+    evidence: [],
+    provenance: { sourceSessions: [record.sessionId] },
+    schemaVersion: "1.0",
+  }] };
 }
 ```
 
 ### Pattern 2: Cost-effectiveness analysis
 
 ```typescript
-async analyze(record: SessionRecord): Promise<Experience[]> {
-  const costUsd = record.events
-    .filter(e => (e as any).usage?.usd)
-    .reduce((sum, e) => sum + ((e as any).usage.usd ?? 0), 0);
+async analyze(record: SessionRecord): Promise<Result<readonly Experience[]>> {
+  const providerCalls = record.events.filter(e => e.kind === "provider_call");
+  let costUsd = 0;
+  for (const pc of providerCalls) {
+    for (const event of (pc as any).events) {
+      if (event.type === "stop") costUsd += event.usage?.usd ?? 0;
+    }
+  }
 
-  const duration = record.endedAt - record.startedAt;
-  const costPerMinute = costUsd / (duration / 60000);
+  const duration = (record.endedAt ?? Date.now()) - record.startedAt;
+  const costPerMinute = duration > 0 ? costUsd / (duration / 60000) : 0;
 
-  return [{
-    id: `exp-${record.sessionId}`,
-    approach: "cheap-first-strong-second",
-    problemSignature: record.contractId,
-    solutions: [{
-      decision: costPerMinute > 1.0 ? "Escalate to Sonnet" : "Use Haiku",
-      outcome: "success",
-      costUsd,
+  return { ok: true, value: [{
+    id: `exp-${record.sessionId}` as ExperienceId,
+    taskType: "cost-optimization",
+    approachFingerprint: costPerMinute > 1.0 ? "use-strong-model" : "use-weak-model",
+    description: `Cost: $${costUsd.toFixed(4)} (${costPerMinute.toFixed(2)}/min)`,
+    optimizedTopology: { kind: "supervisor-worker", config: { dispatch: "parallel" } },
+    decisionLessons: [{
+      stepDescription: "Model selection",
+      chosen: costPerMinute > 1.0 ? "Upgrade to stronger model" : "Weak model sufficient",
+      worked: true,
     }],
-    metadata: { costPerMinute },
-  }];
+    outcomes: { aligned: true, cost: costUsd, wallMs: duration },
+    evidence: [],
+    provenance: { sourceSessions: [record.sessionId] },
+    schemaVersion: "1.0",
+  }] };
 }
 ```
 
 ### Pattern 3: Topology effectiveness
 
 ```typescript
-async analyze(record: SessionRecord): Promise<Experience[]> {
-  const isParallel = record.events.filter(e => e.kind === "progress").length > 3;
-  const wasEffective = record.events.some(e => e.kind === "verdict" && (e as any).verdict.kind === "aligned");
+async analyze(record: SessionRecord): Promise<Result<readonly Experience[]>> {
+  const envelopes = record.events
+    .filter(e => e.kind === "envelope")
+    .map(e => (e as any).envelope);
 
-  return [{
-    id: `exp-${record.sessionId}`,
-    approach: isParallel ? "parallel-workers" : "sequential",
-    problemSignature: record.contractId,
-    solutions: [{
-      decision: isParallel ? "Use parallel topology" : "Use sequential",
-      outcome: wasEffective ? "success" : "retry-needed",
-      costUsd: record.costLedger?.totals.grand ?? 0,
+  const progressCount = envelopes.filter(e => e.kind === "progress").length;
+  const isParallel = progressCount > 3;
+  const wasEffective = envelopes.some(e => e.kind === "verdict" && e.verdict.kind === "aligned");
+
+  return { ok: true, value: [{
+    id: `exp-${record.sessionId}` as ExperienceId,
+    taskType: "topology-selection",
+    approachFingerprint: isParallel ? "parallel-workers" : "sequential-workflow",
+    description: `Topology: ${isParallel ? "parallel" : "sequential"}; Effective: ${wasEffective}`,
+    optimizedTopology: isParallel ? { kind: "supervisor-worker", config: { dispatch: "parallel" } } : { kind: "pipeline", config: {} },
+    decisionLessons: [{
+      stepDescription: "Topology choice",
+      chosen: isParallel ? "Use parallel workers" : "Use sequential pipeline",
+      worked: wasEffective,
     }],
-    metadata: { parallel: isParallel },
-  }];
+    outcomes: { aligned: wasEffective, cost: 0.5, wallMs: (record.endedAt ?? Date.now()) - record.startedAt },
+    evidence: [],
+    provenance: { sourceSessions: [record.sessionId] },
+    schemaVersion: "1.0",
+  }] };
 }
 ```
 
@@ -218,7 +281,7 @@ async analyze(record: SessionRecord): Promise<Experience[]> {
 
 1. **Postmortem doesn't get called** — Mount an ExperienceLibrary. Kernel auto-invokes postmortem only if both postmortem AND library are mounted.
 
-2. **Experience has wrong problemSignature** — Use a consistent signature across similar tasks. Example: "bug-fix-in-typescript", not "bug-fix-in-typescript-2024-04-17".
+2. **Experience has wrong approachFingerprint** — Use a consistent fingerprint across similar tasks. Example: "bug-fix-in-typescript", not "bug-fix-in-typescript-2024-04-17".
 
 3. **Hints are never consumed** — Integrate with surveillance. Surveillance receives hints via `AssessmentInput.experienceHints` and uses them to calibrate probes.
 
@@ -229,14 +292,24 @@ async analyze(record: SessionRecord): Promise<Experience[]> {
 ## Minimal invocation
 
 ```typescript
-const postmortem = {
-  analyze: async (record: SessionRecord) => [{
-    id: `exp-${record.sessionId}`,
-    approach: "demo",
-    problemSignature: "test",
-    solutions: [{ decision: "worked", outcome: "success", costUsd: 0 }],
-    metadata: { ts: Date.now() },
-  }],
+import type { Postmortem, SessionRecord, Experience, ExperienceId, AgentId, Result } from "@emerge/kernel/contracts";
+
+const postmortem: Postmortem = {
+  analyze: async (record: SessionRecord): Promise<Result<readonly Experience[]>> => ({
+    ok: true,
+    value: [{
+      id: `exp-${record.sessionId}` as ExperienceId,
+      taskType: "demo",
+      approachFingerprint: "test",
+      description: "Test experience",
+      optimizedTopology: { kind: "supervisor-worker", config: { dispatch: "parallel" } },
+      decisionLessons: [{ stepDescription: "worked", chosen: "yes", worked: true }],
+      outcomes: { aligned: true, cost: 0, wallMs: 0 },
+      evidence: [],
+      provenance: { sourceSessions: [record.sessionId] },
+      schemaVersion: "1.0",
+    }],
+  }),
 };
 
 kernel.mountPostmortem(postmortem);

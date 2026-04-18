@@ -172,7 +172,7 @@ ANTHROPIC_API_KEY=sk-ant-... node examples/hello-agent-anthropic/dist/index.js
 # or
 OPENAI_API_KEY=sk-... node examples/hello-agent-openai/dist/index.js
 # or
-EMERGE_LLM_BASE_URL=http://localhost:11434/v1EMERGE_LLM_MODEL=llama3.2 \
+EMERGE_LLM_BASE_URL=http://localhost:11434/v1 EMERGE_LLM_MODEL=llama3.2 \
   node examples/hello-agent-custom-url/dist/index.js
 ```
 
