@@ -23,7 +23,19 @@ import type {
 export interface AnthropicProviderConfig {
   readonly apiKey?: string;
   readonly model?: string;
+  /**
+   * Override the API base URL. Useful for:
+   *   - OpenRouter: baseURL = "https://openrouter.ai/api/v1"
+   *   - Auth proxies / corporate gateways
+   *   - Local Anthropic-compatible services
+   */
   readonly baseURL?: string;
+  /**
+   * Extra HTTP headers forwarded on every request. Useful for:
+   *   - OpenRouter: { "HTTP-Referer": "...", "X-Title": "..." }
+   *   - Auth proxies: { "X-Auth-Token": "..." }
+   */
+  readonly extraHeaders?: Record<string, string>;
   /** Reproducibility tier. "pinned" pins temperature/top-p and passes seed when available. */
   readonly tier?: ReproducibilityTier;
   /** Fixed seed for pinned tier (best-effort — Anthropic API may not honour it). */
@@ -59,6 +71,7 @@ export class AnthropicProvider implements Provider {
       // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature requires bracket notation
       apiKey: config.apiKey ?? process.env["ANTHROPIC_API_KEY"],
       ...(config.baseURL ? { baseURL: config.baseURL } : {}),
+      ...(config.extraHeaders !== undefined ? { defaultHeaders: config.extraHeaders } : {}),
     });
     this.capabilities = {
       id: `anthropic-${this.model}`,

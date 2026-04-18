@@ -5,7 +5,7 @@
 import type { Verdict } from "../contracts/adjudicator.js";
 import type { CostMeter } from "../contracts/cost.js";
 import type { Custodian } from "../contracts/custodian.js";
-import type { ExperienceLibrary } from "../contracts/experience.js";
+import type { ExperienceLibrary, Postmortem } from "../contracts/experience.js";
 import type {
   AgentHandle,
   AgentId,
@@ -297,6 +297,8 @@ export class Kernel {
   private sandbox: Sandbox;
   private surveillance: Surveillance | undefined;
   private experienceLibrary: ExperienceLibrary | undefined;
+  /** C: Postmortem analyzer — invoked after endSession() if also an ExperienceLibrary is mounted. */
+  private postmortem: Postmortem | undefined;
   /** D: mounted in-process Custodian for quota auto-routing. */
   private custodian: Custodian | undefined;
   /** D: quota router subscription cleanup — active when custodian is mounted. */
@@ -343,6 +345,17 @@ export class Kernel {
    */
   mountExperienceLibrary(library: ExperienceLibrary): void {
     this.experienceLibrary = library;
+  }
+
+  /**
+   * C: Attach a Postmortem analyzer. When both a Postmortem AND an ExperienceLibrary
+   * are mounted, endSession() automatically invokes postmortem.analyze(record) after
+   * the SessionRecord is finalized, then library.ingest() for each emitted Experience.
+   * Errors from these steps are returned as additional fields on the result; not thrown.
+   * See ADR 0019.
+   */
+  mountPostmortem(postmortem: Postmortem): void {
+    this.postmortem = postmortem;
   }
 
   mountSurveillance(s: Surveillance): void {
@@ -713,10 +726,45 @@ export class Kernel {
     this._verdictSubscriptionCleanup?.();
     this._verdictSubscriptionCleanup = undefined;
 
+    let record: SessionRecord | undefined;
     if (this.deps.recorder) {
-      return this.deps.recorder.end(this.sessionId);
+      const recResult = await this.deps.recorder.end(this.sessionId);
+      if (!recResult.ok) return recResult;
+      record = recResult.value;
     }
-    return { ok: true, value: undefined };
+
+    // C: ADR 0019 — auto-invoke Postmortem + ExperienceLibrary ingest after session ends.
+    // Errors are non-fatal: returned as postmortemErrors so callers can observe but the
+    // session record is still committed.
+    if (
+      this.postmortem !== undefined &&
+      this.experienceLibrary !== undefined &&
+      record !== undefined
+    ) {
+      const postmortemErrors: string[] = [];
+      const pm = this.postmortem;
+      const lib = this.experienceLibrary;
+
+      const analyzeResult = await pm.analyze(record);
+      if (!analyzeResult.ok) {
+        postmortemErrors.push(`postmortem.analyze: ${analyzeResult.error.message}`);
+      } else {
+        for (const exp of analyzeResult.value) {
+          const ingestResult = await lib.ingest(exp);
+          if (!ingestResult.ok) {
+            postmortemErrors.push(`library.ingest(${exp.id}): ${ingestResult.error.message}`);
+          }
+        }
+      }
+
+      if (postmortemErrors.length > 0) {
+        console.warn(
+          `[emerge/kernel] endSession: postmortem errors (non-fatal): ${postmortemErrors.join("; ")}`,
+        );
+      }
+    }
+
+    return { ok: true, value: record };
   }
 
   getBus(): Bus {

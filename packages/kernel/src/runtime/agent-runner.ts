@@ -110,6 +110,8 @@ export class AgentRunner implements AgentHandle {
   // In-memory artifact store for to_handle projections
   private readonly artifactStore = new Map<ArtifactHandle, string>();
   private artifactCounter = 0;
+  // A3: inbox queue for request envelopes arriving while the loop is running
+  private readonly _inboxQueue: Array<{ payload: unknown; correlationId: CorrelationId }> = [];
 
   constructor(deps: AgentRunnerDeps) {
     this.deps = deps;
@@ -180,6 +182,27 @@ export class AgentRunner implements AgentHandle {
     const schedState = scheduler.register(spec.id, spec.termination);
     // Track which projection kinds have already emitted their one-time warn.
     const warnedProjections = new Set<string>();
+
+    // A3: Subscribe to request/query envelopes addressed to this agent.
+    // Any request that arrives (from topology helpers, other agents, or programmatic senders)
+    // is queued in _inboxQueue and injected as a user message at the top of the next iteration.
+    // This unifies the "initial input via constructor" path with the "dispatched via bus" path.
+    const inboxSub = bus.subscribe(this.id, { kind: "self" });
+    void (async () => {
+      for await (const env of inboxSub.events) {
+        if (env.kind === "request" || env.kind === "query") {
+          if (env.to.kind === "agent" && env.to.id === this.id) {
+            const payload = (env as { payload?: unknown }).payload;
+            if (payload !== undefined && payload !== null) {
+              this._inboxQueue.push({
+                payload,
+                correlationId: env.correlationId,
+              });
+            }
+          }
+        }
+      }
+    })();
 
     // C3: Subscribe to quota decision envelopes addressed to this agent.
     // When a grant/partial arrives between preStep calls, apply it immediately.
@@ -268,6 +291,22 @@ export class AgentRunner implements AgentHandle {
           },
         });
         break;
+      }
+
+      // A3: Drain the inbox queue — inject any pending request payloads as user messages.
+      // This is how topology helpers (supervisorWorker, workerPool, pipeline) deliver tasks:
+      // they send a `request` envelope on the bus; the runner picks it up here and treats
+      // the payload as the task input for this iteration.
+      while (this._inboxQueue.length > 0) {
+        const item = this._inboxQueue.shift();
+        if (item !== undefined) {
+          const text =
+            typeof item.payload === "string" ? item.payload : JSON.stringify(item.payload);
+          messages.push({
+            role: "user",
+            content: [{ type: "text", text }],
+          });
+        }
       }
 
       this.setState("thinking");
@@ -473,6 +512,7 @@ export class AgentRunner implements AgentHandle {
               timestamp: Date.now(),
               payload: { reason: "human_timeout", checkpoint: recommendation.checkpoint },
             });
+            inboxSub.close();
             quotaSub.close();
             return;
           }
@@ -561,6 +601,7 @@ export class AgentRunner implements AgentHandle {
               stopReason: "failed",
             },
           });
+          inboxSub.close();
           quotaSub.close();
           return;
         }
@@ -757,6 +798,7 @@ export class AgentRunner implements AgentHandle {
                 timestamp: Date.now(),
                 payload: { reason: "tool_emitted", tool: targetTool },
               });
+              inboxSub.close();
               quotaSub.close();
               return;
             }
@@ -776,6 +818,7 @@ export class AgentRunner implements AgentHandle {
           timestamp: Date.now(),
           payload: { text: textAccumulator, reason: "end_turn" },
         });
+        inboxSub.close();
         quotaSub.close();
         return;
       }
@@ -1077,6 +1120,7 @@ export class AgentRunner implements AgentHandle {
                 timestamp: Date.now(),
                 payload: { reason: "tool_emitted", tool: targetTool },
               });
+              inboxSub.close();
               quotaSub.close();
               return;
             }
@@ -1084,7 +1128,8 @@ export class AgentRunner implements AgentHandle {
         }
       }
     }
-    // C3: close the quota subscription on normal loop exit
+    // A3/C3: close inbox and quota subscriptions on normal loop exit
+    inboxSub.close();
     quotaSub.close();
   }
 

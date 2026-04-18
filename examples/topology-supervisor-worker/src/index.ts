@@ -1,5 +1,5 @@
 /**
- * topology-supervisor-worker demo (M3a fix-up).
+ * topology-supervisor-worker demo (M3c1 update).
  *
  * Exercises:
  *   A. LocalFsArtifactStore
@@ -13,6 +13,8 @@
  *      excludes the Custodian — pinned items survive both constraints by ADR 0016)
  *   F. Quota auto-routing (kernel routes quota.request → Custodian → quota.partial → AgentRunner)
  *   G. SessionRecord summary on exit
+ *   H. (M3c1) Postmortem auto-invoke: mounted Postmortem + ExperienceLibrary, asserts
+ *      that the Experience lands in the library after endSession() (ADR 0019).
  *
  * Uses MockProvider only — no API keys required.
  */
@@ -24,16 +26,105 @@ import type {
   AgentId,
   ContractId,
   CorrelationId,
+  DecisionLesson,
   EvaluationInput,
+  Experience,
+  ExperienceBundle,
+  ExperienceId,
+  ExperienceLibrary,
+  ExperienceMatch,
+  HintBudget,
+  HintQuery,
+  Postmortem,
   ProviderEvent,
   QuotaDecision,
   QuotaRequest,
+  Result,
   SessionId,
+  SessionRecord,
   Verdict,
 } from "@emerge/kernel/contracts";
 import { Kernel } from "@emerge/kernel/runtime";
 import { MockProvider } from "@emerge/provider-mock";
 import { makeRecorder } from "@emerge/replay";
+
+// ─── Inline ExperienceLibrary (in-memory) ─────────────────────────────────
+class InMemoryExperienceLibrary implements ExperienceLibrary {
+  private readonly store = new Map<ExperienceId, Experience>();
+  private counter = 0;
+
+  async hint(_query: HintQuery, _budget: HintBudget): Promise<Result<readonly ExperienceMatch[]>> {
+    return { ok: true, value: [] };
+  }
+
+  async ingest(
+    exp: Experience,
+  ): Promise<Result<{ readonly id: ExperienceId; readonly mergedWith?: readonly ExperienceId[] }>> {
+    this.store.set(exp.id, exp);
+    return { ok: true, value: { id: exp.id } };
+  }
+
+  async export(_ids: readonly ExperienceId[]): Promise<Result<ExperienceBundle>> {
+    return {
+      ok: true,
+      value: { version: "1.0", experiences: [...this.store.values()] },
+    };
+  }
+
+  async importBundle(bundle: ExperienceBundle): Promise<Result<readonly ExperienceId[]>> {
+    const ids: ExperienceId[] = [];
+    for (const exp of bundle.experiences) {
+      this.store.set(exp.id, exp);
+      ids.push(exp.id);
+    }
+    return { ok: true, value: ids };
+  }
+
+  async get(id: ExperienceId): Promise<Result<Experience | undefined>> {
+    return { ok: true, value: this.store.get(id) };
+  }
+
+  list(): readonly Experience[] {
+    return [...this.store.values()];
+  }
+}
+
+// ─── Inline Postmortem (produces one tiny Experience per session) ──────────
+class SimplePostmortem implements Postmortem {
+  async analyze(record: SessionRecord): Promise<Result<readonly Experience[]>> {
+    const lessons: DecisionLesson[] = [
+      {
+        stepDescription: "supervisor-worker topology",
+        chosen: "parallel dispatch with 3 workers",
+        alternatives: ["sequential", "single-agent"],
+        worked: true,
+        note: `session ${String(record.sessionId)} completed with ${record.events.length} events`,
+      },
+    ];
+
+    const exp: Experience = {
+      id: `exp-${String(record.sessionId)}-0` as ExperienceId,
+      taskType: "text-summarization",
+      approachFingerprint: createHash("sha256")
+        .update("supervisor-worker:parallel:3-workers")
+        .digest("hex")
+        .slice(0, 16),
+      description: "Three-worker parallel summarization with supervisor aggregation",
+      optimizedTopology: { kind: "supervisor-worker", config: { dispatch: "parallel" } },
+      decisionLessons: lessons,
+      outcomes: {
+        aligned: true,
+        cost: 0,
+        wallMs: (record.endedAt ?? Date.now()) - record.startedAt,
+      },
+      evidence: [],
+      provenance: { sourceSessions: [record.sessionId] },
+      schemaVersion: "1.0",
+    };
+
+    return { ok: true, value: [exp] };
+  }
+}
 
 // ─── Inputs ───────────────────────────────────────────────────────────────
 const INPUT_A =
@@ -87,7 +178,11 @@ function makeWorkerScript(workerOutput: string): readonly { events: readonly Pro
 
 // ─── Main ─────────────────────────────────────────────────────────────────
 async function main() {
-  console.log("=== M3a topology-supervisor-worker demo (fix-up) ===\n");
+  console.log("=== M3c1 topology-supervisor-worker demo ===\n");
+
+  // H: (M3c1) Postmortem + ExperienceLibrary — mounted before the session starts
+  const experienceLibrary = new InMemoryExperienceLibrary();
+  const postmortem = new SimplePostmortem();
 
   // 1. Build Contract
   const contract = {
@@ -313,6 +408,10 @@ async function main() {
 
   // Mount the Custodian for quota auto-routing
   kernel.mountCustodian(custodianInstance);
+
+  // H: (M3c1) Mount Postmortem + ExperienceLibrary — endSession() will invoke them
+  kernel.mountExperienceLibrary(experienceLibrary);
+  kernel.mountPostmortem(postmortem);
 
   const sessionId = `topo-demo-${Date.now()}` as SessionId;
   const contractId = contract.id;
@@ -688,7 +787,22 @@ async function main() {
     process.exit(1);
   }
 
-  console.log("\nM3a topology demo complete (fix-up)");
+  // H: (M3c1) Assert the Experience landed in the library after endSession() auto-invoked
+  // postmortem.analyze() → library.ingest() (ADR 0019)
+  const experienceList = experienceLibrary.list();
+  const hasExperience = experienceList.length > 0;
+  console.log(
+    `\n[postmortem] Experiences in library: ${experienceList.length} (taskType: ${experienceList[0]?.taskType ?? "n/a"})`,
+  );
+
+  if (!hasExperience) {
+    console.error(
+      "\nASSERTION FAILED: Postmortem did not produce an Experience in the library (ADR 0019)",
+    );
+    process.exit(1);
+  }
+
+  console.log("\nM3c1 topology demo complete");
   process.exit(0);
 }
 
