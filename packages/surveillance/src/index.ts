@@ -9,9 +9,11 @@ import type {
   AssessmentInput,
   ExperienceLibrary,
   ObservedCapabilities,
+  Provider,
   ProviderCapabilities,
   ProviderId,
   Recommendation,
+  Result,
   StepObservation,
   StepProfile,
   Surveillance,
@@ -25,25 +27,69 @@ export interface Probe {
   readonly difficulty: StepProfile["difficulty"];
   readonly goal: string;
   readonly tools: readonly ToolName[];
-  readonly expectedAnswer?: unknown;
+  /** Expected answer for scoring: string (contains check), RegExp, or callback. */
+  readonly expectedAnswer?: string | RegExp | ((response: string) => boolean);
 }
 
-// Default probe set covering each difficulty class
+/**
+ * Results of running the probe set against a provider.
+ * ceiling = highest difficulty class where pass rate >= 70%.
+ */
+export interface ProbeResults {
+  readonly ceiling: StepProfile["difficulty"];
+  readonly perDifficulty: Partial<
+    Record<StepProfile["difficulty"], { passed: number; total: number }>
+  >;
+  readonly envelope: ObservedCapabilities;
+}
+
+/** Default probe set: 3 probes per difficulty class (15 total). */
 export const DEFAULT_PROBES: readonly Probe[] = [
+  // trivial (3)
   {
     id: "probe-trivial-echo",
     difficulty: "trivial",
     goal: "Repeat the word 'hello'.",
     tools: [],
-    expectedAnswer: "hello",
+    expectedAnswer: /hello/i,
   },
   {
-    id: "probe-small-sum",
-    difficulty: "small",
-    goal: "What is 2 + 2?",
+    id: "probe-trivial-sum",
+    difficulty: "trivial",
+    goal: "What is 2 + 2? Reply with just the number.",
     tools: [],
-    expectedAnswer: "4",
+    expectedAnswer: /4/,
   },
+  {
+    id: "probe-trivial-capital",
+    difficulty: "trivial",
+    goal: "What is the capital of France? Reply with just the city name.",
+    tools: [],
+    expectedAnswer: /paris/i,
+  },
+  // small (3)
+  {
+    id: "probe-small-sort",
+    difficulty: "small",
+    goal: "Sort these numbers in ascending order: 5, 2, 8, 1. Reply with just the sorted list.",
+    tools: [],
+    expectedAnswer: /1.*2.*5.*8/,
+  },
+  {
+    id: "probe-small-acronym",
+    difficulty: "small",
+    goal: "What does HTTP stand for? Reply in one sentence.",
+    tools: [],
+    expectedAnswer: /hypertext/i,
+  },
+  {
+    id: "probe-small-convert",
+    difficulty: "small",
+    goal: "Convert 100 Fahrenheit to Celsius. Reply with just the number (rounded to nearest integer).",
+    tools: [],
+    expectedAnswer: /37|38/,
+  },
+  // medium (3)
   {
     id: "probe-medium-summarize",
     difficulty: "medium",
@@ -51,16 +97,61 @@ export const DEFAULT_PROBES: readonly Probe[] = [
     tools: [],
   },
   {
+    id: "probe-medium-rebase",
+    difficulty: "medium",
+    goal: "Explain how to use git rebase to squash 3 commits in 2 sentences.",
+    tools: [],
+    expectedAnswer: /squash|rebase/i,
+  },
+  {
+    id: "probe-medium-regex",
+    difficulty: "medium",
+    goal: "Write a regex that matches an email address. Reply with just the regex pattern.",
+    tools: [],
+    expectedAnswer: /@/,
+  },
+  // large (3)
+  {
     id: "probe-large-plan",
     difficulty: "large",
     goal: "Outline a 5-step plan to build a REST API with authentication.",
     tools: [],
+    expectedAnswer: (r) => r.split("\n").length >= 3,
   },
   {
-    id: "probe-research-synthesis",
+    id: "probe-large-cache",
+    difficulty: "large",
+    goal: "Outline the design of a multi-tier cache with eviction policy in 3-5 bullet points.",
+    tools: [],
+    expectedAnswer: /cache|evict/i,
+  },
+  {
+    id: "probe-large-tradeoffs",
+    difficulty: "large",
+    goal: "List 3 tradeoffs between monolithic and microservices architectures.",
+    tools: [],
+    expectedAnswer: /monolith|microservice/i,
+  },
+  // research (3)
+  {
+    id: "probe-research-consensus",
     difficulty: "research",
     goal: "Compare three approaches to distributed consensus and recommend one.",
     tools: [],
+  },
+  {
+    id: "probe-research-llm",
+    difficulty: "research",
+    goal: "Summarize 3 key differences between GPT-style and BERT-style language models.",
+    tools: [],
+    expectedAnswer: /gpt|bert|autoregressive|bidirectional/i,
+  },
+  {
+    id: "probe-research-cap",
+    difficulty: "research",
+    goal: "Explain the CAP theorem and give one real-world database example for each combination.",
+    tools: [],
+    expectedAnswer: /cap|consistency|availability|partition/i,
   },
 ];
 
@@ -350,14 +441,11 @@ export class CalibratedSurveillance implements Surveillance, ExperienceAware {
   }
 
   /**
-   * Run the calibrated probe set against a provider to determine its
-   * competence ceiling. In M2 this is heuristic: we use the claimed
-   * capabilities to infer the ceiling without actually making model calls,
-   * since probe execution requires async model invocation which is outside
-   * the Surveillance contract's scope.
+   * Heuristic probe runner (synchronous, no model calls).
+   * Used when you want to seed the envelope from claimed capabilities only —
+   * e.g. in tests or when a real provider is not available.
    *
-   * Real calibration happens via observe() as steps run. This method sets
-   * the initial probe high-water mark based on claimed capabilities.
+   * For real probe execution (M3b), call `runProbesAsync(provider, probes)`.
    */
   runProbes(provider: { capabilities: ProviderCapabilities }): void {
     const claimed = provider.capabilities.claimed;
@@ -379,6 +467,112 @@ export class CalibratedSurveillance implements Surveillance, ExperienceAware {
       probeSuccessRate: 0.9,
       lastUpdatedAt: Date.now(),
     });
+  }
+
+  /**
+   * Run a real probe set against a provider.
+   *
+   * Each probe's `goal` is sent as a single-turn user message. The response is
+   * scored against `expectedAnswer` (string contains, RegExp test, or callback).
+   * Probes without an `expectedAnswer` are counted as passed when the response
+   * is non-empty.
+   *
+   * ceiling = the highest difficulty class where pass rate >= 70%.
+   * Updates the surveillance envelope with probe-derived data.
+   */
+  async runProbesAsync(
+    provider: Provider,
+    probes: readonly Probe[] = DEFAULT_PROBES,
+  ): Promise<Result<ProbeResults>> {
+    const providerId = provider.capabilities.id;
+
+    // Group probes by difficulty
+    const byDifficulty = new Map<StepProfile["difficulty"], Probe[]>();
+    for (const probe of probes) {
+      let group = byDifficulty.get(probe.difficulty);
+      if (!group) {
+        group = [];
+        byDifficulty.set(probe.difficulty, group);
+      }
+      group.push(probe);
+    }
+
+    const perDifficulty: Partial<
+      Record<StepProfile["difficulty"], { passed: number; total: number }>
+    > = {};
+    let totalPassed = 0;
+    let totalRun = 0;
+
+    const difficulties: StepProfile["difficulty"][] = [
+      "trivial",
+      "small",
+      "medium",
+      "large",
+      "research",
+    ];
+
+    for (const difficulty of difficulties) {
+      const group = byDifficulty.get(difficulty);
+      if (!group || group.length === 0) continue;
+
+      let passed = 0;
+      for (const probe of group) {
+        try {
+          let responseText = "";
+          const iter = provider.invoke({
+            messages: [{ role: "user", content: [{ type: "text", text: probe.goal }] }],
+          });
+          for await (const event of iter) {
+            if (event.type === "text_delta") responseText += event.text;
+            if (event.type === "stop" || event.type === "error") break;
+          }
+
+          const pass = this.scoreProbe(probe, responseText);
+          if (pass) passed++;
+        } catch {
+          // Probe failed to run — count as not passed
+        }
+      }
+
+      perDifficulty[difficulty] = { passed, total: group.length };
+      totalPassed += passed;
+      totalRun += group.length;
+    }
+
+    // ceiling = highest difficulty where pass rate >= 70%
+    let ceiling: StepProfile["difficulty"] = "trivial";
+    for (const difficulty of difficulties) {
+      const stats = perDifficulty[difficulty];
+      if (!stats || stats.total === 0) continue;
+      if (stats.passed / stats.total >= 0.7) {
+        ceiling = difficulty;
+      }
+    }
+
+    const probeSuccessRate = totalRun > 0 ? totalPassed / totalRun : 0;
+    const envelope: ObservedCapabilities = {
+      probeSuccessRate,
+      lastUpdatedAt: Date.now(),
+    };
+
+    this.probeHighWater.set(providerId, ceiling);
+    this.envelopeMap.set(providerId, envelope);
+
+    return {
+      ok: true,
+      value: { ceiling, perDifficulty, envelope },
+    };
+  }
+
+  private scoreProbe(probe: Probe, response: string): boolean {
+    if (!probe.expectedAnswer) return response.trim().length > 0;
+    if (typeof probe.expectedAnswer === "string") {
+      return response.toLowerCase().includes(probe.expectedAnswer.toLowerCase());
+    }
+    if (probe.expectedAnswer instanceof RegExp) {
+      return probe.expectedAnswer.test(response);
+    }
+    return probe.expectedAnswer(response);
   }
 
   // --- side-channel: kernel sets these before calling observe() ---

@@ -39,7 +39,10 @@ import type { Budget, QuotaDecision } from "../contracts/index.js";
 import type { SessionRecorder } from "../contracts/replay.js";
 import type { AssessmentInput, StepProfile, Surveillance } from "../contracts/surveillance.js";
 import { runDecomposition } from "./decomposition.js";
+import type { VerificationConfig } from "./kernel.js";
 import type { Scheduler } from "./scheduler.js";
+import type { SchemaAdapterRegistry } from "./schema-adapter.js";
+import { maybeApplyTruncationNotice } from "./truncation.js";
 
 export interface AgentRunnerDeps {
   spec: AgentSpec;
@@ -68,6 +71,12 @@ export interface AgentRunnerDeps {
    * which is honest — surveillance proceeds without priors.
    */
   experienceLibrary?: ExperienceLibrary | undefined;
+  /** M3b: schema adapter registry for per-provider tool spec shaping. */
+  schemaAdapterRegistry?: SchemaAdapterRegistry | undefined;
+  /** M3b: post-step verification config (opt-in). */
+  verification?: VerificationConfig | undefined;
+  /** M3b: adjudicator agent id from KernelConfig.roles — used for verification routing. */
+  adjudicatorId?: AgentId | undefined;
 }
 
 function makeCard(spec: AgentSpec, provider: Provider): AgentCard {
@@ -474,11 +483,17 @@ export class AgentRunner implements AgentHandle {
       }
       // --- end surveillance ---
 
-      // Build provider tool specs
+      // Build provider tool specs — apply per-provider schema adapter if mounted
+      const providerId = this.deps.provider.capabilities.id;
       const providerTools = tools.map((t) => ({
         name: t.spec.name,
         description: t.spec.description,
-        inputSchema: t.spec.jsonSchema ?? { type: "object" as const },
+        inputSchema: this.deps.schemaAdapterRegistry
+          ? this.deps.schemaAdapterRegistry.adapt(
+              t.spec,
+              providerId as import("../contracts/provider.js").ProviderId,
+            )
+          : (t.spec.jsonSchema ?? { type: "object" as const }),
       }));
 
       const req: import("../contracts/index.js").ProviderRequest = {
@@ -609,6 +624,76 @@ export class AgentRunner implements AgentHandle {
         });
       }
       // --- end surveillance observe ---
+
+      // --- M3b: per-step verification (opt-in via VerificationConfig) ---
+      const verif = this.deps.verification;
+      if (verif && verif.mode === "per-step") {
+        const verifierId = verif.verifier ?? this.deps.adjudicatorId;
+        if (verifierId) {
+          // Send a verdict-request envelope to the verifier and inject the response
+          // as a system note into working memory so the next step sees it.
+          const verdictCorrId =
+            `verdict-${this.id}-${schedState.iteration}-${Date.now()}` as CorrelationId;
+          const verdictSub = bus.subscribe(this.id, {
+            kind: "from",
+            sender: verifierId,
+            kinds: ["verdict"],
+          });
+
+          await bus.send({
+            kind: "request",
+            correlationId: verdictCorrId,
+            sessionId,
+            from: this.id,
+            to: { kind: "agent", id: verifierId },
+            timestamp: Date.now(),
+            payload: {
+              type: "verdict_request",
+              stepId: `${this.id}-step-${schedState.iteration}`,
+              output: textAccumulator,
+            },
+          });
+
+          // Await verdict with a 5s timeout — don't block the loop indefinitely
+          const verdictTimeout = 5_000;
+          const verdictResult = await Promise.race([
+            (async () => {
+              for await (const env of verdictSub.events) {
+                if (env.correlationId === verdictCorrId && env.kind === "verdict") {
+                  return env.verdict;
+                }
+              }
+              return null;
+            })(),
+            new Promise<null>((resolve) => setTimeout(() => resolve(null), verdictTimeout)),
+          ]);
+          verdictSub.close();
+
+          if (verdictResult) {
+            const verdictKind = (verdictResult as { kind?: string }).kind ?? "unknown";
+            if (verdictKind === "off-track" || verdictKind === "failed") {
+              // Inject verdict as a corrective system note — agent loop continues
+              const suggestion =
+                (verdictResult as { suggestion?: string; reason?: string }).suggestion ??
+                (verdictResult as { suggestion?: string; reason?: string }).reason ??
+                "Reconsider your approach.";
+              messages.push({
+                role: "user",
+                content: [
+                  {
+                    type: "text",
+                    text: `[verification:${verdictKind}] ${suggestion}`,
+                  },
+                ],
+              });
+              console.log(
+                `[agent-runner:${this.id}] verification verdict=${verdictKind} — injecting correction`,
+              );
+            }
+          }
+        }
+      }
+      // --- end per-step verification ---
 
       // Append assistant message
       const assistantContent: ProviderContent[] = [];
@@ -755,7 +840,8 @@ export class AgentRunner implements AgentHandle {
 
           let result: ToolResult;
           if (toolResult.ok && toolResult.value.ok) {
-            result = toolResult.value.value;
+            // M3b: apply truncation notice before projections run — if sizeBytes > preview.length
+            result = maybeApplyTruncationNotice(toolResult.value.value);
           } else {
             result = {
               ok: false,

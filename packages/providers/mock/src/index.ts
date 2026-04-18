@@ -1,5 +1,8 @@
 /**
  * MockProvider — scripted provider for tests/demos without API keys.
+ * M3b: also exports the recommended schema adapter for mock providers.
+ * Since MockProvider mimics a generic scripted interface, it uses the
+ * default (no-op) adapter — real adapters live in the vendor provider packages.
  *
  * M2 additions:
  *   - Accepts `tier` to select reproducibility behaviour.
@@ -19,6 +22,7 @@ import type {
   ReproducibilityTier,
   Result,
 } from "@emerge/kernel/contracts";
+export { defaultAdapter as mockSchemaAdapter } from "@emerge/kernel/runtime";
 
 export interface MockScriptEntry {
   /** Events emitted in order for this call. */
