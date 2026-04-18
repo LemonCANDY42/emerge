@@ -61,6 +61,13 @@ import { SchemaAdapterRegistry } from "./schema-adapter.js";
  * verifier defaults to config.roles.adjudicator when undefined.
  * timeoutMs defaults to 5000 (milliseconds to wait for a verdict before proceeding).
  * See ADR 0032.
+ *
+ * requireVerdictBeforeExit (ADR 0035): when true, endSession() will refuse to
+ * complete unless at least one verdict (aligned/misaligned/uncertain/off-track/failed/partial)
+ * was issued by the Adjudicator in the current session. Default: false (back-compat).
+ * This is distinct from the existing aligned-verdict gate (ADR 0012): that gate
+ * checks the verdict KIND; this gate checks that ANY verdict was issued at all.
+ * Both can be active simultaneously. The check is skipped when trustMode is "implicit".
  */
 export interface VerificationConfig {
   readonly mode: "off" | "per-step" | "on-failure";
@@ -68,6 +75,11 @@ export interface VerificationConfig {
   readonly verifier?: AgentId;
   /** Milliseconds to wait for a verdict before proceeding. Default: 5000. */
   readonly timeoutMs?: number;
+  /**
+   * ADR 0035: when true, endSession() refuses to complete unless at least one
+   * verdict was issued by the Adjudicator in this session. Default: false.
+   */
+  readonly requireVerdictBeforeExit?: boolean;
 }
 
 export interface KernelDeps {
@@ -717,16 +729,33 @@ export class Kernel {
             "[emerge/kernel] endSession: no adjudicator configured — session will complete without verdict gating. Set config.roles.adjudicator to enforce ADR 0012.",
           );
         }
-      } else if (this._latestVerdict?.kind !== "aligned") {
-        // Adjudicator is configured but hasn't issued an aligned verdict.
-        this._verdictSubscriptionCleanup?.();
-        return {
-          ok: false,
-          error: {
-            code: "E_NO_ALIGNED_VERDICT",
-            message: `Session cannot be marked completed: adjudicator has not issued an 'aligned' verdict (latest: ${this._latestVerdict?.kind ?? "none"}). Emit an 'aligned' verdict from the adjudicator before ending the session, or set config.trustMode: "implicit" to bypass.`,
-          },
-        };
+      } else {
+        // ADR 0035: requireVerdictBeforeExit gate — check that ANY verdict was issued.
+        // This is distinct from the ADR 0012 aligned-kind check below.
+        // Both can be active: this one fires first with a more informative error code.
+        if (this.deps.verification?.requireVerdictBeforeExit && this._latestVerdict === undefined) {
+          this._verdictSubscriptionCleanup?.();
+          return {
+            ok: false,
+            error: {
+              code: "E_NO_VERIFICATION_CALLED",
+              message: `Session cannot exit: the Adjudicator at id=${adjudicatorId} never issued a verdict for this session — call request_verification or set requireVerdictBeforeExit=false to bypass.`,
+            },
+          };
+        }
+
+        // ADR 0012: aligned-verdict gate — check that the verdict kind is "aligned".
+        if (this._latestVerdict?.kind !== "aligned") {
+          // Adjudicator is configured but hasn't issued an aligned verdict.
+          this._verdictSubscriptionCleanup?.();
+          return {
+            ok: false,
+            error: {
+              code: "E_NO_ALIGNED_VERDICT",
+              message: `Session cannot be marked completed: adjudicator has not issued an 'aligned' verdict (latest: ${this._latestVerdict?.kind ?? "none"}). Emit an 'aligned' verdict from the adjudicator before ending the session, or set config.trustMode: "implicit" to bypass.`,
+            },
+          };
+        }
       }
     }
 

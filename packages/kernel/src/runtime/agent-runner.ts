@@ -30,6 +30,7 @@ import type {
   SchemaRef,
   SessionId,
   SignalKind,
+  SpanId,
   Telemetry,
   ToolInvocation,
   ToolRegistry,
@@ -38,6 +39,7 @@ import type {
 import type { Budget, QuotaDecision } from "../contracts/index.js";
 import type { SessionRecorder } from "../contracts/replay.js";
 import type { AssessmentInput, StepProfile, Surveillance } from "../contracts/surveillance.js";
+import { correctToolCall } from "./correction.js";
 import { runDecomposition } from "./decomposition.js";
 import type { VerificationConfig } from "./kernel.js";
 import type { Scheduler } from "./scheduler.js";
@@ -1051,13 +1053,22 @@ export class AgentRunner implements AgentHandle {
             continue;
           }
 
-          const invocation: ToolInvocation = {
+          const baseInvocation: ToolInvocation = {
             toolCallId: toolCallId as never,
             callerAgent: this.id,
             name: tc.name,
             input: parsed,
             signal: schedState.abortController.signal,
           };
+
+          // ADR 0034: apply pre-dispatch tool-call correction heuristics.
+          const { call: invocation, fixes } = correctToolCall(baseInvocation, tool.spec.jsonSchema);
+          if (fixes.length > 0 && this.deps.telemetry) {
+            const corrSpanId = `tool-correction-${toolCallId}` as SpanId;
+            this.deps.telemetry.event(corrSpanId, "tool_call.corrected", {
+              fixes: JSON.stringify(fixes),
+            });
+          }
 
           const toolStart = Date.now();
           const toolResult = await this.deps.sandbox.run(
