@@ -10,6 +10,7 @@
  */
 
 import { Command } from "commander";
+import { dashboardCommand } from "./commands/dashboard.js";
 import { probeCommand } from "./commands/probe.js";
 import { replayCommand } from "./commands/replay.js";
 import { runCommand } from "./commands/run.js";
@@ -60,5 +61,24 @@ program
     }
     await statusCommand(statusOpts);
   });
+
+program
+  .command("dashboard")
+  .description("Open the browser dashboard for an agent session")
+  .option("--session <jsonl>", "Path to a recorded JSONL session (replay mode)")
+  .option("--jsonl <jsonl>", "Path to a live JSONL file to tail")
+  .option("--port <n>", "Dashboard server port (default 7777)")
+  .option("--listen <host>", "Bind host (default 127.0.0.1)")
+  .allowUnknownOption(true)
+  .action(
+    async (options: {
+      session?: string;
+      jsonl?: string;
+      port?: string;
+      listen?: string;
+    }) => {
+      await dashboardCommand(options);
+    },
+  );
 
 program.parse(process.argv);

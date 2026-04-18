@@ -1,0 +1,16 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "dist",
+    "composite": true,
+    "tsBuildInfoFile": "dist/.tsbuildinfo",
+    "types": ["node"],
+    "jsx": "react-jsx",
+    "lib": ["ES2023", "DOM"],
+    "moduleResolution": "NodeNext"
+  },
+  "include": ["src/**/*"],
+  "exclude": ["src/client/**/*", "node_modules", "dist"],
+  "references": [{ "path": "../../packages/kernel" }, { "path": "../../packages/tui" }]
+}

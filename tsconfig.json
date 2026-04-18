@@ -26,6 +26,7 @@
     { "path": "./examples/hello-mcp" },
     { "path": "./packages/telemetry-otel" },
     { "path": "./packages/cli" },
-    { "path": "./examples/otel-phoenix" }
+    { "path": "./examples/otel-phoenix" },
+    { "path": "./packages/tui" }
   ]
 }

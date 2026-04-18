@@ -22,7 +22,11 @@
  * Uses MockProvider only — no API keys required.
  */
 
+import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import {
   acceptanceCriteriaFromContract,
   buildAdjudicator,
@@ -141,6 +145,7 @@ async function runTopology(
   runLabel: string,
   sessionId: SessionId,
   experienceLibrary: HintCountingLibrary,
+  jsonlPath?: string,
 ): Promise<{ verdict: Verdict; experienceCount: number; hintsWithResults: number }> {
   console.log(`\n${"=".repeat(55)}`);
   console.log(`  ${runLabel}`);
@@ -288,7 +293,7 @@ async function runTopology(
   });
 
   // 5. Build Kernel (fresh per run — shared library persists across runs)
-  const recorder = makeRecorder();
+  const recorder = makeRecorder(jsonlPath !== undefined ? { filePath: jsonlPath } : undefined);
   const kernel = new Kernel(
     {
       mode: "auto",
@@ -629,8 +634,79 @@ async function runTopology(
   return { verdict, experienceCount: experienceLibrary.size(), hintsWithResults };
 }
 
+// ─── TUI mode helper ──────────────────────────────────────────────────────────
+function spawnTui(jsonlPath: string): import("node:child_process").ChildProcess {
+  // Resolve the emerge-tui binary relative to the monorepo root
+  const tuiBin = join(new URL(".", import.meta.url).pathname, "../../../packages/tui/dist/cli.js");
+  const child = spawn("node", [tuiBin, "live", "--jsonl", jsonlPath], {
+    stdio: "inherit",
+    detached: false,
+  });
+  child.on("error", (err) => {
+    // Non-fatal: TUI spawn failure doesn't break the demo
+    console.warn(`[tui] Failed to spawn TUI: ${String(err)}`);
+  });
+  return child;
+}
+
+// ─── Dashboard mode helper ────────────────────────────────────────────────────
+function spawnDashboard(jsonlPath: string): import("node:child_process").ChildProcess {
+  // Resolve the emerge-dashboard binary relative to the monorepo root
+  const dashBin = join(
+    new URL(".", import.meta.url).pathname,
+    "../../../packages/dashboard/dist/server/cli.js",
+  );
+  const child = spawn("node", [dashBin, "--jsonl", jsonlPath], {
+    stdio: ["ignore", "pipe", "pipe"],
+    detached: false,
+  });
+  child.stdout?.on("data", (data: Buffer) => {
+    process.stdout.write(`[dashboard] ${String(data)}`);
+  });
+  child.stderr?.on("data", (data: Buffer) => {
+    process.stderr.write(`[dashboard] ${String(data)}`);
+  });
+  child.on("error", (err) => {
+    // Non-fatal: dashboard spawn failure doesn't break the demo
+    console.warn(`[dashboard] Failed to spawn dashboard: ${String(err)}`);
+  });
+  return child;
+}
+
 // ─── Main ─────────────────────────────────────────────────────────────────
 async function main() {
+  // EMERGE_TUI=1: write JSONL to a temp file and spawn emerge-tui live in parallel.
+  // EMERGE_DASHBOARD=1: write JSONL to a temp file and spawn emerge-dashboard live in parallel.
+  // Default: no TUI/dashboard (CI-safe behavior unchanged).
+  // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+  const tuiEnabled = process.env["EMERGE_TUI"] === "1";
+  // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+  const dashboardEnabled = process.env["EMERGE_DASHBOARD"] === "1";
+  let jsonlPath: string | undefined;
+  let tuiProcess: import("node:child_process").ChildProcess | undefined;
+  let dashboardProcess: import("node:child_process").ChildProcess | undefined;
+
+  if (tuiEnabled || dashboardEnabled) {
+    const tmpDir = mkdtempSync(join(tmpdir(), "emerge-topo-"));
+    jsonlPath = join(tmpDir, "session.jsonl");
+    console.log(`[session] Writing JSONL to: ${jsonlPath}`);
+  }
+
+  if (tuiEnabled && jsonlPath !== undefined) {
+    console.log("[tui] Spawning emerge-tui live...");
+    tuiProcess = spawnTui(jsonlPath);
+    // Give the TUI a moment to start watching the file
+    await new Promise<void>((resolve) => setTimeout(resolve, 200));
+  }
+
+  if (dashboardEnabled && jsonlPath !== undefined) {
+    console.log("[dashboard] Spawning emerge-dashboard live...");
+    dashboardProcess = spawnDashboard(jsonlPath);
+    // Give the dashboard server a moment to start
+    await new Promise<void>((resolve) => setTimeout(resolve, 500));
+    console.log("[dashboard] Open: http://127.0.0.1:7777");
+  }
+
   console.log("=== M3c2.5 topology-supervisor-worker demo ===\n");
   console.log("Goal: prove the postmortem→experience→surveillance loop runs end-to-end.");
   console.log("The same task is executed TWICE with a shared in-memory experience library.");
@@ -644,7 +720,8 @@ async function main() {
   // ─── Run 1 ────────────────────────────────────────────────────────────
   experienceLibrary.resetHintCount();
   const session1 = `topo-demo-run1-${Date.now()}` as SessionId;
-  const run1 = await runTopology("Run 1 — no priors", session1, experienceLibrary);
+  // Pass jsonlPath only to Run 1 (TUI shows the live session as it progresses)
+  const run1 = await runTopology("Run 1 — no priors", session1, experienceLibrary, jsonlPath);
 
   console.log(`\n[run-1] Experiences in library after run: ${run1.experienceCount}`);
   console.log(`[run-1] Hint calls with results during run: ${run1.hintsWithResults}`);
@@ -709,6 +786,32 @@ async function main() {
 
   console.log("\nAll M3c2.5 assertions passed. Experience loop is end-to-end.");
   console.log("M3c2.5 topology demo complete.");
+
+  // Clean up TUI process if spawned
+  if (tuiProcess !== undefined) {
+    // Give the TUI a moment to render the final state
+    await new Promise<void>((resolve) => setTimeout(resolve, 500));
+    tuiProcess.kill("SIGTERM");
+  }
+
+  // Clean up dashboard process if spawned.
+  // Kill synchronously before process.exit so the child does not inherit a
+  // broken stdio pipe. SIGTERM gives it a chance to flush; after 2 s we send
+  // SIGKILL to guarantee the process is gone before the parent exits.
+  if (dashboardProcess !== undefined && !dashboardProcess.killed) {
+    dashboardProcess.kill("SIGTERM");
+    await new Promise<void>((resolve) => {
+      const deadline = setTimeout(() => {
+        dashboardProcess?.kill("SIGKILL");
+        resolve();
+      }, 2000);
+      dashboardProcess?.once("exit", () => {
+        clearTimeout(deadline);
+        resolve();
+      });
+    });
+  }
+
   process.exit(0);
 }
 
