@@ -17,6 +17,7 @@
     "@emerge/kernel": "workspace:*",
     "@emerge/provider-mock": "workspace:*",
     "@emerge/agents": "workspace:*",
-    "@emerge/replay": "workspace:*"
+    "@emerge/replay": "workspace:*",
+    "@emerge/experience-inmemory": "workspace:*"
   }
 }

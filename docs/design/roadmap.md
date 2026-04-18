@@ -89,6 +89,34 @@ demos: `hello-agent-anthropic`, `hello-agent-openai`,
 `hello-agent-custom-url` (each runs against a real model when the env
 var is set; exits 0 with a clear "skipped" message otherwise).
 
+### M3c2.5 — In-memory ExperienceLibrary backend + smarter postmortem
+
+`@emerge/experience-inmemory` ships `InMemoryExperienceLibrary` with
+`hint / ingest / export / importBundle / get` working end-to-end. Merge-on-ingest
+at configurable threshold (default 0.85) collapses repeated runs of the same
+approach into one growing experience rather than N duplicates. Weighted similarity
+scoring: approach 0.6 / taskType 0.3 / semantic (Jaccard) 0.1.
+
+`defaultAnalyze` in `@emerge/agents` rewritten to compute a stable
+`approachFingerprint` from session structure — the hash of (tools used,
+surveillance recommendations, decision choices) — not from session identity.
+`deriveTaskType` now returns `record.contractRef` (stable, always present) as the
+primary task key, so the query key in `AgentRunner` and the stored key in the
+library always agree.
+
+The `hint()` fetch in `AgentRunner` was hoisted before the surveillance gate so
+the read half of the loop runs whenever a library is mounted, regardless of
+whether full surveillance is active. This closes the
+postmortem→experience→hint loop without requiring a `CalibratedSurveillance`
+instance.
+
+`examples/topology-supervisor-worker` updated to run the same task twice with a
+shared `HintCountingLibrary`. Run 1 sees zero hints (library empty); Run 2 sees
+≥1 hint with results (library holds run 1's merged experience). The demo exits 0.
+
+ADR 0038 documents the storage / merge / query design and the M5 migration path.
+Test count: 243 (up from 207 at M3c1 start).
+
 ## Next up
 
 ### M3c2 — CLI + JSONL event schema + OTel emission
@@ -112,30 +140,6 @@ self-built tooling.
   - `emerge status` — reads recent sessions, prints recent topology
     + cost + verdicts.
 - A small Phoenix / Langfuse integration guide in `docs/integrations/`.
-
-### M3c2.5 — Minimal experience-library backend
-**Goal:** close the surveillance/experience self-improving loop with a
-real-running backend before competition catches up.
-
-Driven by the April 2026 absorption pass (`docs/design/leaderboard-absorption-2026-04.md`):
-OpenDev (arXiv 2603.05344) shipped the closest published analog to our
-`Experience` library — a "playbook of learned strategies that evolve
-based on feedback." Our differentiator only holds if we have a
-real-running backend, not a contract-with-no-impl.
-
-- `@emerge/experience-inmemory` package. In-memory `ExperienceLibrary`
-  implementation with `hint` / `ingest` / `export` / `importBundle` /
-  `get` working end-to-end. Persistence comes in M4; this milestone
-  proves the loop runs.
-- Wire `Kernel.mountExperienceLibrary()` into the existing
-  `agent-runner` `surveillance.assess()` path so `experienceHints` are
-  actually populated when a library is mounted (currently always
-  `undefined`).
-- Update `examples/topology-supervisor-worker` to mount the library +
-  show that a second session of the same task gets a faster path
-  because the postmortem-derived experience hints surveillance.
-- One ADR on experience storage / merge semantics so M5's persistent
-  backend builds on the same shape.
 
 ### M3d — TUI + Web monitor
 **Goal:** see what the harness is doing in real time, in the terminal

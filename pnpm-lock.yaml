@@ -235,6 +235,9 @@ importers:
       '@emerge/agents':
         specifier: workspace:*
         version: link:../../packages/agents
+      '@emerge/experience-inmemory':
+        specifier: workspace:*
+        version: link:../../packages/experience-inmemory
       '@emerge/kernel':
         specifier: workspace:*
         version: link:../../packages/kernel
@@ -317,6 +320,16 @@ importers:
       zod:
         specifier: ^3.24.2
         version: 3.25.76
+    devDependencies:
+      '@types/node':
+        specifier: ^20.11.0
+        version: 20.19.39
+
+  packages/experience-inmemory:
+    dependencies:
+      '@emerge/kernel':
+        specifier: workspace:*
+        version: link:../kernel
     devDependencies:
       '@types/node':
         specifier: ^20.11.0
