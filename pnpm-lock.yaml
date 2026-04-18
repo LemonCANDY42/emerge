@@ -249,6 +249,44 @@ importers:
         specifier: ^20.11.0
         version: 20.19.39
 
+  examples/tbench-smoke-docker:
+    dependencies:
+      '@emerge/eval-terminal-bench':
+        specifier: workspace:*
+        version: link:../../packages/eval-terminal-bench
+      '@emerge/kernel':
+        specifier: workspace:*
+        version: link:../../packages/kernel
+      '@emerge/provider-mock':
+        specifier: workspace:*
+        version: link:../../packages/providers/mock
+      '@emerge/sandbox-harbor':
+        specifier: workspace:*
+        version: link:../../packages/sandbox-harbor
+    devDependencies:
+      '@types/node':
+        specifier: ^20.11.0
+        version: 20.19.39
+
+  examples/tbench-smoke-inline:
+    dependencies:
+      '@emerge/eval-terminal-bench':
+        specifier: workspace:*
+        version: link:../../packages/eval-terminal-bench
+      '@emerge/kernel':
+        specifier: workspace:*
+        version: link:../../packages/kernel
+      '@emerge/provider-mock':
+        specifier: workspace:*
+        version: link:../../packages/providers/mock
+      '@emerge/sandbox-inproc':
+        specifier: workspace:*
+        version: link:../../packages/sandbox-inproc
+    devDependencies:
+      '@types/node':
+        specifier: ^20.11.0
+        version: 20.19.39
+
   examples/topology-supervisor-worker:
     dependencies:
       '@emerge/agents':
@@ -402,6 +440,40 @@ importers:
         specifier: ^5.4.19
         version: 5.4.21(@types/node@20.19.39)(lightningcss@1.32.0)
 
+  packages/eval-terminal-bench:
+    dependencies:
+      '@emerge/agents':
+        specifier: workspace:*
+        version: link:../agents
+      '@emerge/kernel':
+        specifier: workspace:*
+        version: link:../kernel
+      '@emerge/provider-mock':
+        specifier: workspace:*
+        version: link:../providers/mock
+      '@emerge/sandbox-harbor':
+        specifier: workspace:*
+        version: link:../sandbox-harbor
+      '@emerge/sandbox-inproc':
+        specifier: workspace:*
+        version: link:../sandbox-inproc
+      '@emerge/tools':
+        specifier: workspace:*
+        version: link:../tools
+      '@emerge/workspaces-git-worktree':
+        specifier: workspace:*
+        version: link:../workspaces-git-worktree
+      yaml:
+        specifier: ^2.6.1
+        version: 2.8.3
+      zod:
+        specifier: ^3.24.2
+        version: 3.25.76
+    devDependencies:
+      '@types/node':
+        specifier: ^20.11.0
+        version: 20.19.39
+
   packages/experience-inmemory:
     dependencies:
       '@emerge/kernel':
@@ -470,6 +542,16 @@ importers:
         version: 20.19.39
 
   packages/replay:
+    dependencies:
+      '@emerge/kernel':
+        specifier: workspace:*
+        version: link:../kernel
+    devDependencies:
+      '@types/node':
+        specifier: ^20.11.0
+        version: 20.19.39
+
+  packages/sandbox-harbor:
     dependencies:
       '@emerge/kernel':
         specifier: workspace:*

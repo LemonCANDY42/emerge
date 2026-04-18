@@ -1,0 +1,19 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "dist",
+    "composite": true,
+    "tsBuildInfoFile": "dist/.tsbuildinfo"
+  },
+  "include": ["src/**/*"],
+  "references": [
+    { "path": "../../packages/kernel" },
+    { "path": "../../packages/agents" },
+    { "path": "../../packages/providers/mock" },
+    { "path": "../../packages/sandbox-harbor" },
+    { "path": "../../packages/sandbox-inproc" },
+    { "path": "../../packages/tools" },
+    { "path": "../../packages/workspaces-git-worktree" }
+  ]
+}

@@ -132,7 +132,7 @@ EMERGE_LLM_BASE_URL=http://localhost:11434/v1 EMERGE_LLM_MODEL=llama3.2 \
 | `@emerge/experience-inmemory` | In-memory `ExperienceLibrary` + surveillance `experienceHints` wired end-to-end | shipped (M3c2.5) |
 | `@emerge/tui` | Ink+React live monitor: topology / verdicts / cost / replay scrubber | planned (M3d) |
 | `@emerge/dashboard` | Vite+React+WebSocket web monitor: topology graph / verdict feed / replay | planned (M3d) |
-| `@emerge/eval-terminal-bench` + `@emerge/sandbox-harbor` + `TerminalBenchBlueprint` | First public TB 2.0 leaderboard submission | planned (M4-prep) |
+| `@emerge/eval-terminal-bench` + `@emerge/sandbox-harbor` + `TerminalBenchBlueprint` | Task loader, session builder, blueprint, CLI, Docker sandbox — local smoke tests PASS | shipped (M4-prep) |
 
 > **M3c1 note:** Inbox unification (AgentRunner consumes `request` envelopes addressed to it), supervisor LLM aggregation in `supervisorWorker`, `Kernel.mountPostmortem()` + auto-invoke in `endSession()`, OpenAI/OpenAI-compat providers, and three real-model demos shipped in this milestone.
 >

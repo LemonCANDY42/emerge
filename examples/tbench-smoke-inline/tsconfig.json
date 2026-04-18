@@ -1,0 +1,17 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "dist",
+    "composite": true,
+    "tsBuildInfoFile": "dist/.tsbuildinfo",
+    "types": ["node"]
+  },
+  "include": ["src/**/*"],
+  "references": [
+    { "path": "../../packages/kernel" },
+    { "path": "../../packages/eval-terminal-bench" },
+    { "path": "../../packages/providers/mock" },
+    { "path": "../../packages/sandbox-inproc" }
+  ]
+}

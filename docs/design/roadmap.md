@@ -159,8 +159,8 @@ or the browser.
   contract-enforcement verdicts and Custodian/Adjudicator decisions as
   first-class UI elements.
 
-### M4-prep — First Terminal-Bench 2.0 public submission
-**Goal:** a real number on a public leaderboard, not just a contract.
+### M4-prep — Terminal-Bench 2.0 runner + local validation
+**Status: SHIPPED** (2026-04-18) — local smoke tests pass; public submission pending.
 
 Driven by the April 2026 absorption pass: 7 of the top-10 leaderboard
 entries use OpenAI/Codex backends; emerge has all three protocols
@@ -168,16 +168,25 @@ shipped (M3c1) but **0 public benchmark submissions**. Even a low score
 (say 50%) backed by our auditability + reproducibility narrative is
 more credible positioning than zero.
 
-- Build `@emerge/eval-terminal-bench` per the existing plan in
-  `docs/design/terminal-bench-integration-plan.md`.
-- `@emerge/sandbox-harbor` for the Docker / container exec path.
-- A `TerminalBenchBlueprint` that ships sensible defaults
-  (active surveillance, `record-replay` reproducibility tier so each
-  attempt is reproducible, mounted Custodian + Adjudicator with strict
-  verification gate).
-- Submit one public run to tbench.ai with the result + the SessionRecord
-  bundle published as evidence. Goal: prove the architecture runs
-  end-to-end against a third-party evaluator, surface real bottlenecks.
+**Shipped:**
+- `@emerge/eval-terminal-bench` — task loader, session builder, blueprint,
+  acceptance runner, CLI (`emerge-tbench run <task.yaml>`).
+- `@emerge/sandbox-harbor` — Docker-backed Sandbox for container isolation.
+- `TerminalBenchBlueprint` with sensible defaults (20 iterations, 100k/8k
+  token budget, fs.read + fs.write + bash tools, adjudicator watching bus).
+- Two smoke examples: `tbench-smoke-inline` (InProcSandbox, no Docker) and
+  `tbench-smoke-docker` (HarborSandbox, `python:3.12-slim`). Both PASS.
+- `M4-PREP-SELF-TEST-REPORT.md` at repo root with actual console output.
+
+**Key fix:** `fs.write` and `bash` ship with `defaultMode: "ask"`. The session
+builder wraps all eval tools with `defaultMode: "auto"` so the agent-runner
+passes through to the sandbox immediately; the sandbox policy is the real gate.
+
+**Pending (before public submission):**
+- Real provider run (AnthropicProvider or OpenAIProvider) against actual tasks.
+- Task discovery from a manifest / directory for batch runs.
+- Structured JSON result output for leaderboard submission.
+- Container reuse or pre-installed pytest image to cut cold-start overhead.
 
 This is intentionally pre-M4 (persistence) because TB 2.0 tasks fit in
 single-process sessions; persistence is M4 only after we know what the
