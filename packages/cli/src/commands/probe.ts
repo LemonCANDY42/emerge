@@ -39,8 +39,13 @@ export async function probeCommand(providerConfigArg: string): Promise<void> {
     process.exit(1);
   }
 
+  // TODO(m3d): wire this to CalibratedSurveillance.runProbesAsync() once the
+  // CLI supports real providers. Currently the mock provider returns a static
+  // ceiling without running actual probes.
   console.log("[emerge probe] Running calibrated probe set against mock provider...");
-  console.log("[emerge probe] (Mock mode: returns static ceiling without running real LLM)");
+  console.log(
+    "[emerge probe] (stub: emerge probe is not yet wired to runProbesAsync — output is hard-coded)",
+  );
   console.log("");
   console.log("Provider capability envelope:");
   console.log(`  provider id:   ${providerId}`);

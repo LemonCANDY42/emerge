@@ -62,7 +62,7 @@ function summarise(events: JsonlEvent[], filePath: string): SessionSummary | nul
   let providerCallCount = 0;
   let toolCallCount = 0;
   let lifecycleCount = 0;
-  let verdict = "none";
+  let latestVerdictKind: string | undefined;
 
   for (const e of events) {
     if (e.type === "provider_call") {
@@ -80,12 +80,17 @@ function summarise(events: JsonlEvent[], filePath: string): SessionSummary | nul
     } else if (e.type === "span.end" && e.span.usage !== undefined) {
       // span.end events from telemetry carry usage
       totalUsd += e.span.usage.usd;
+    } else if (e.type === "envelope") {
+      // Parse verdict envelopes to surface the adjudicator's latest decision.
+      const env = e.envelope;
+      if (env.kind === "verdict") {
+        latestVerdictKind = env.verdict.kind;
+      }
     }
   }
 
-  // Verdict from adjudicator is not part of JSONL schema yet — show "implicit" for sessions
-  // that used trustMode: "implicit"
-  verdict = "implicit";
+  // Surface the latest verdict kind, or "(no verdict)" if no verdict was issued.
+  const verdict = latestVerdictKind ?? "(no verdict)";
 
   return {
     filePath,

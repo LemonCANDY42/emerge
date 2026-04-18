@@ -62,7 +62,11 @@ export const BlueprintSchema = z
     agent: AgentConfigSchema,
     termination: TerminationConfigSchema,
     verification: VerificationConfigSchema.optional(),
-    trustMode: z.enum(["implicit", "explicit"]).default("implicit"),
+    // Default changed to "explicit" to align with kernel.ts:720's own default
+    // and to avoid silently bypassing ADR 0012/0035 verdict gates.
+    // Blueprints that deliberately want no-adjudicator behaviour must set
+    // trustMode: implicit explicitly. See M3c2 review finding #3.
+    trustMode: z.enum(["implicit", "explicit"]).default("explicit"),
   })
   .strict();
 

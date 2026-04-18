@@ -223,10 +223,26 @@ export async function replayCommand(sessionJsonlPath: string): Promise<void> {
     process.exit(1);
   }
 
-  const snapshot = await spawnResult.value.snapshot();
-  console.log(`[emerge replay] Replay complete. Agent state: ${snapshot.state}`);
+  const handle = spawnResult.value;
+  const snapshot = await handle.snapshot();
+  const agentState = snapshot.state;
+  console.log(`[emerge replay] Replay complete. Agent state: ${agentState}`);
   console.log(
     `[emerge replay] Tokens in: ${snapshot.usage.tokensIn}, out: ${snapshot.usage.tokensOut}`,
   );
+
+  // Derive exit code from agent state: only "completed" is success.
+  if (agentState !== "completed") {
+    // AgentRunner (the concrete type behind AgentHandle) exposes lastError().
+    // We access it via a structural cast since it is not part of the public contract.
+    const runner = handle as unknown as {
+      lastError(): { code: string; message: string } | undefined;
+    };
+    const lastError = runner.lastError();
+    if (lastError !== undefined) {
+      console.error(`[emerge replay] Agent error: [${lastError.code}] ${lastError.message}`);
+    }
+    process.exit(1);
+  }
   process.exit(0);
 }

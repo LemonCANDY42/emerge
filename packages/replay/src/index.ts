@@ -8,6 +8,8 @@
  * in favour of the streaming per-line format. See ADR 0037 for rationale.
  */
 
+import { appendFileSync, mkdirSync } from "node:fs";
+import { dirname } from "node:path";
 import type {
   ContractId,
   Provider,
@@ -179,6 +181,10 @@ type ProviderRequest = Parameters<Provider["invoke"]>[0];
  * The old fat-record format (one JSON blob per session at end()) is replaced
  * by the per-line streaming format. Readers that relied on the fat-record must
  * migrate to line-by-line parsing. See ADR 0037.
+ *
+ * File writes are SYNCHRONOUS so that line order in the file always matches
+ * call order and the `at` timestamp on each event is captured at the call site
+ * (not inside an async callback). See M3c2 review finding #1.
  */
 export function makeRecorder(options?: {
   filePath?: string;
@@ -186,49 +192,39 @@ export function makeRecorder(options?: {
   const inner = new InMemorySessionRecorder();
   let lastRecord: SessionRecord | undefined;
 
-  // Lazily initialised file write helper (avoids Node import in non-Node envs)
-  let writeLineFn: ((line: string) => void) | undefined;
-
-  async function ensureWriter(fp: string): Promise<(line: string) => void> {
-    if (writeLineFn) return writeLineFn;
-    const { appendFileSync, mkdirSync } = await import("node:fs");
-    const { dirname } = await import("node:path");
-    const dir = dirname(fp);
+  // Initialise synchronous file appender eagerly if a path is provided.
+  // mkdirSync + appendFileSync keep ordering guaranteed — no microtask queue.
+  let writeLine: ((line: string) => void) | undefined;
+  if (options?.filePath) {
+    const dir = dirname(options.filePath);
     if (dir) mkdirSync(dir, { recursive: true });
-    writeLineFn = (line: string) => appendFileSync(fp, `${line}\n`, "utf-8");
-    return writeLineFn;
+    const fp = options.filePath;
+    writeLine = (line: string) => appendFileSync(fp, `${line}\n`, "utf-8");
   }
 
   return {
     start(sessionId, contract) {
+      // Capture timestamp BEFORE handing off to inner (keeps at <= event.at).
+      const at = Date.now();
       inner.start(sessionId, contract);
-      if (options?.filePath) {
-        // Fire-and-forget: write session.start line. Errors are non-fatal.
-        const fp = options.filePath;
-        void ensureWriter(fp).then((write) => {
-          write(JSON.stringify(sessionStartEvent(sessionId, contract)));
-        });
+      if (writeLine) {
+        writeLine(JSON.stringify(sessionStartEvent(sessionId, contract, at)));
       }
     },
     record(event) {
       inner.record(event);
-      if (options?.filePath) {
-        const fp = options.filePath;
-        const jsonlLine = JSON.stringify(fromRecordedEvent(event));
-        void ensureWriter(fp).then((write) => {
-          write(jsonlLine);
-        });
+      if (writeLine) {
+        writeLine(JSON.stringify(fromRecordedEvent(event)));
       }
     },
     async end(sessionId) {
+      const at = Date.now();
       const result = await inner.end(sessionId);
       if (!result.ok) return result;
       lastRecord = result.value;
 
-      if (options?.filePath) {
-        const fp = options.filePath;
-        const write = await ensureWriter(fp);
-        write(JSON.stringify(sessionEndEvent(sessionId)));
+      if (writeLine) {
+        writeLine(JSON.stringify(sessionEndEvent(sessionId, at)));
       }
 
       return result;

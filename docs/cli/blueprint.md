@@ -113,13 +113,22 @@ verdict was issued. Only useful when an Adjudicator is mounted (library API).
 ### `trustMode` (optional)
 
 ```yaml
-trustMode: "implicit"  # "implicit" | "explicit", default: "implicit"
+trustMode: "explicit"  # "implicit" | "explicit", default: "explicit"
 ```
 
-`"implicit"` — session ends without verdict gating (recommended for demos).  
-`"explicit"` — session requires an aligned Adjudicator verdict to complete.
-If `explicit` is set without a mounted Adjudicator, `endSession()` will warn
-but still succeed (no adjudicator configured = implicit trust).
+`"explicit"` — session requires an aligned Adjudicator verdict to complete
+(the default). If no Adjudicator is mounted, `endSession()` will warn once but
+still succeed; the gate is only enforced when an Adjudicator is configured.
+
+`"implicit"` — session ends without verdict gating. Use this for demos and
+quick tests where you intentionally run without an Adjudicator. Set it
+explicitly in your blueprint — it is no longer the default so that production
+blueprints that omit the field benefit from the stricter behaviour.
+
+**Why the default changed (M3c2):** ADR 0012 and ADR 0035 define kernel-level
+verification gates. The previous default of `"implicit"` silently bypassed both
+gates. Blueprints that relied on the implicit default continue to work — just
+add `trustMode: implicit` explicitly.
 
 ---
 

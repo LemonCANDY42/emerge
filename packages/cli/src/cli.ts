@@ -50,7 +50,14 @@ program
   .action(async (options: { dir?: string; last?: string }) => {
     const statusOpts: import("./commands/status.js").StatusOptions = {};
     if (options.dir !== undefined) statusOpts.dir = options.dir;
-    if (options.last !== undefined) statusOpts.last = Number.parseInt(options.last, 10);
+    if (options.last !== undefined) {
+      const parsed = Number.parseInt(options.last, 10);
+      if (!Number.isFinite(parsed) || parsed <= 0) {
+        console.error(`[emerge status] --last must be a positive integer, got: "${options.last}"`);
+        process.exit(1);
+      }
+      statusOpts.last = parsed;
+    }
     await statusCommand(statusOpts);
   });
 

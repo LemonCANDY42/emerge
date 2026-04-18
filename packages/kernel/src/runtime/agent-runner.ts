@@ -764,6 +764,44 @@ export class AgentRunner implements AgentHandle {
       }
       // --- end surveillance observe ---
 
+      // Pre-compute corrected inputs for all pending tool calls.
+      // We do this BEFORE building the assistant message so that the message
+      // echoed back to the model and the cycle-guard fingerprint both reflect
+      // the corrected (dispatched) input, not the raw model output.
+      // ADR 0034 correction telemetry is emitted here at the single site where
+      // correction happens (previously was emitted in the execution loop).
+      // See M3c2 review finding #4.
+      const correctedInputs = new Map<string, unknown>();
+      for (const [toolCallId, tc] of pendingToolCalls) {
+        let originalParsed: unknown = {};
+        try {
+          originalParsed = JSON.parse(tc.inputJson || "{}");
+        } catch {
+          originalParsed = {};
+        }
+        const tool = this.deps.toolRegistry.get(tc.name);
+        if (tool) {
+          const baseInv: import("../contracts/index.js").ToolInvocation = {
+            toolCallId: toolCallId as never,
+            callerAgent: this.id,
+            name: tc.name,
+            input: originalParsed,
+            signal: schedState.abortController.signal,
+          };
+          const { call: correctedInv, fixes } = correctToolCall(baseInv, tool.spec.jsonSchema);
+          // ADR 0034: emit correction telemetry at the point of correction.
+          if (fixes.length > 0 && this.deps.telemetry) {
+            const corrSpanId = `tool-correction-${toolCallId}` as SpanId;
+            this.deps.telemetry.event(corrSpanId, "tool_call.corrected", {
+              fixes: JSON.stringify(fixes),
+            });
+          }
+          correctedInputs.set(toolCallId, correctedInv.input);
+        } else {
+          correctedInputs.set(toolCallId, originalParsed);
+        }
+      }
+
       // C2: Append assistant message FIRST — the model must see its own output
       // before the verifier's reaction (ordering: assistant(X) → user(verdict) → user(toolresults))
       const assistantContent: ProviderContent[] = [];
@@ -771,13 +809,13 @@ export class AgentRunner implements AgentHandle {
         assistantContent.push({ type: "text", text: textAccumulator });
       }
       for (const [toolCallId, tc] of pendingToolCalls) {
-        let parsed: unknown = {};
-        try {
-          parsed = JSON.parse(tc.inputJson || "{}");
-        } catch {
-          parsed = {};
-        }
-        assistantContent.push({ type: "tool_use", toolCallId, name: tc.name, input: parsed });
+        // Use corrected input so the model's own history matches what was dispatched.
+        assistantContent.push({
+          type: "tool_use",
+          toolCallId,
+          name: tc.name,
+          input: correctedInputs.get(toolCallId) ?? {},
+        });
       }
 
       if (assistantContent.length > 0) {
@@ -939,12 +977,11 @@ export class AgentRunner implements AgentHandle {
             step: `tool:${tc.name}`,
           });
 
-          let parsed: unknown = {};
-          try {
-            parsed = JSON.parse(tc.inputJson || "{}");
-          } catch {
-            parsed = {};
-          }
+          // Use corrected input from the pre-computation map (built before the
+          // assistant message was appended). This ensures the input dispatched to
+          // the tool, echoed back in the assistant message, and fingerprinted by
+          // the cycle guard are all the same corrected value. See M3c2 finding #4.
+          const correctedInput = correctedInputs.get(toolCallId) ?? {};
 
           const tool = this.deps.toolRegistry.get(tc.name);
           if (!tool) {
@@ -1053,22 +1090,16 @@ export class AgentRunner implements AgentHandle {
             continue;
           }
 
-          const baseInvocation: ToolInvocation = {
+          // ADR 0034: correction was pre-applied in the correctedInputs map above.
+          // Build the final invocation using the corrected input so that the tool,
+          // the recorder, and the cycle-guard all see the same (corrected) value.
+          const invocation: ToolInvocation = {
             toolCallId: toolCallId as never,
             callerAgent: this.id,
             name: tc.name,
-            input: parsed,
+            input: correctedInput,
             signal: schedState.abortController.signal,
           };
-
-          // ADR 0034: apply pre-dispatch tool-call correction heuristics.
-          const { call: invocation, fixes } = correctToolCall(baseInvocation, tool.spec.jsonSchema);
-          if (fixes.length > 0 && this.deps.telemetry) {
-            const corrSpanId = `tool-correction-${toolCallId}` as SpanId;
-            this.deps.telemetry.event(corrSpanId, "tool_call.corrected", {
-              fixes: JSON.stringify(fixes),
-            });
-          }
 
           const toolStart = Date.now();
           const toolResult = await this.deps.sandbox.run(
@@ -1114,7 +1145,7 @@ export class AgentRunner implements AgentHandle {
             }
           }
 
-          completedToolCalls.push({ toolCallId, name: tc.name, input: parsed, result });
+          completedToolCalls.push({ toolCallId, name: tc.name, input: correctedInput, result });
 
           // C5: Apply projections if declared
           let preview = result.preview;
@@ -1182,10 +1213,13 @@ export class AgentRunner implements AgentHandle {
             output: preview,
           });
 
+          // Use invocation.input (the corrected value) for cycle-guard fingerprinting
+          // so that two corrections of the same raw output yield the same fingerprint.
+          // See M3c2 review finding #4.
           schedState.cycleGuard.recordToolCall(
             this.id,
             tc.name,
-            JSON.stringify(parsed),
+            JSON.stringify(invocation.input),
             projectedResult.preview.slice(0, 64),
           );
 

@@ -100,13 +100,15 @@ After running a session, open `http://localhost:6006` and navigate to the
 **Traces** tab. You should see:
 
 - **One trace per session**, labelled by the session ID.
-- **Nested spans** for each kernel operation:
-  - `agent_spawn` — when an agent is spawned.
-  - `provider_call` — each LLM call, with `emerge.usage.*` attributes showing
-    tokens in/out, wall time, and USD cost.
-  - `tool_call` — each tool invocation.
-  - `bus_envelope` — message bus activity.
-  - `surveillance_assess` — surveillance checks (if mounted).
+- **`agent_spawn` spans** — v1 emits one span per agent spawned, with basic
+  attributes (`emerge.agent.id`, `emerge.span.kind`).
+
+> **v1 span coverage note:** v1 emits `agent_spawn` spans only. Full kernel
+> span coverage (`provider_call`, `tool_call`, `bus_envelope`,
+> `surveillance_assess`) is planned for M3d. If you see only one span per
+> session that is expected behaviour — the wiring is correct, the data is just
+> sparse at this milestone.
+
 - **Error spans** for failed operations (status `ERROR` with `emerge.error.code`
   and `emerge.error.message` attributes).
 - **Free-form events** from `telemetry.event()` visible under each span.

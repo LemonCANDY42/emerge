@@ -148,11 +148,12 @@ export async function runFromBlueprint(
   const record = endResult.value.record;
   const cost = kernel.getCostMeter().ledger();
   const snapshot = await handle.snapshot();
+  const agentState = snapshot.state;
 
   const lines: string[] = [
     `Session: ${String(sessionId)}`,
     `Contract: ${config.contract.id} — ${config.contract.goal}`,
-    `Agent: ${String(handle.id)} (${snapshot.state})`,
+    `Agent: ${String(handle.id)} (${agentState})`,
     `Events: ${record?.events.length ?? 0}`,
     `Tokens in: ${snapshot.usage.tokensIn}`,
     `Tokens out: ${snapshot.usage.tokensOut}`,
@@ -161,6 +162,19 @@ export async function runFromBlueprint(
     `Session JSONL: ${sessionPath}`,
     `Telemetry JSONL: ${telemetryPath}`,
   ];
+
+  // Exit code reflects agent completion state: only "completed" is success.
+  if (agentState !== "completed") {
+    const runner = handle as unknown as {
+      lastError(): { code: string; message: string } | undefined;
+    };
+    const lastError = runner.lastError();
+    const errorLine =
+      lastError !== undefined
+        ? `Agent error: [${lastError.code}] ${lastError.message}`
+        : `Agent ended in state: ${agentState}`;
+    return { exitCode: 1, summary: `${lines.join("\n")}\n${errorLine}` };
+  }
 
   return { exitCode: 0, summary: lines.join("\n") };
 }

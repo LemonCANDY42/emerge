@@ -131,14 +131,16 @@ After running a session, open the Langfuse UI and navigate to **Traces**.
 You should see:
 
 - **One trace per emerge session**, with the session ID as the trace name.
-- **Spans per kernel operation** with `emerge.span.kind` discriminating between
-  `agent_spawn`, `provider_call`, `tool_call`, `bus_envelope`, etc.
-- **Token + cost attributes** on `provider_call` spans:
-  - `emerge.usage.tokensIn`
-  - `emerge.usage.tokensOut`
-  - `emerge.usage.usd`
-  - `emerge.usage.wallMs`
-  - `emerge.usage.toolCalls`
+- **`agent_spawn` spans** — v1 emits one span per agent spawned, with basic
+  attributes (`emerge.agent.id`, `emerge.span.kind`).
+
+> **v1 span coverage note:** v1 emits `agent_spawn` spans only. Full kernel
+> span coverage (`provider_call`, `tool_call`, `bus_envelope`,
+> `surveillance_assess`) is planned for M3d. If you see only one span per
+> session that is expected behaviour — the wiring is correct, the data is just
+> sparse at this milestone. Token + cost attributes will appear on `provider_call`
+> spans once M3d ships.
+
 - **Error spans** with `emerge.error.code` and `emerge.error.message` for
   failed operations.
 - **Free-form events** (from `telemetry.event()`) visible in the span timeline.
