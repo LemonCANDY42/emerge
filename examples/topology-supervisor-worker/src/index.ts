@@ -649,23 +649,62 @@ function spawnTui(jsonlPath: string): import("node:child_process").ChildProcess 
   return child;
 }
 
+// ─── Dashboard mode helper ────────────────────────────────────────────────────
+function spawnDashboard(jsonlPath: string): import("node:child_process").ChildProcess {
+  // Resolve the emerge-dashboard binary relative to the monorepo root
+  const dashBin = join(
+    new URL(".", import.meta.url).pathname,
+    "../../../packages/dashboard/dist/server/cli.js",
+  );
+  const child = spawn("node", [dashBin, "--jsonl", jsonlPath], {
+    stdio: ["ignore", "pipe", "pipe"],
+    detached: false,
+  });
+  child.stdout?.on("data", (data: Buffer) => {
+    process.stdout.write(`[dashboard] ${String(data)}`);
+  });
+  child.stderr?.on("data", (data: Buffer) => {
+    process.stderr.write(`[dashboard] ${String(data)}`);
+  });
+  child.on("error", (err) => {
+    // Non-fatal: dashboard spawn failure doesn't break the demo
+    console.warn(`[dashboard] Failed to spawn dashboard: ${String(err)}`);
+  });
+  return child;
+}
+
 // ─── Main ─────────────────────────────────────────────────────────────────
 async function main() {
   // EMERGE_TUI=1: write JSONL to a temp file and spawn emerge-tui live in parallel.
-  // Default: no TUI (CI-safe behavior unchanged).
+  // EMERGE_DASHBOARD=1: write JSONL to a temp file and spawn emerge-dashboard live in parallel.
+  // Default: no TUI/dashboard (CI-safe behavior unchanged).
   // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
   const tuiEnabled = process.env["EMERGE_TUI"] === "1";
+  // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature
+  const dashboardEnabled = process.env["EMERGE_DASHBOARD"] === "1";
   let jsonlPath: string | undefined;
   let tuiProcess: import("node:child_process").ChildProcess | undefined;
+  let dashboardProcess: import("node:child_process").ChildProcess | undefined;
 
-  if (tuiEnabled) {
+  if (tuiEnabled || dashboardEnabled) {
     const tmpDir = mkdtempSync(join(tmpdir(), "emerge-topo-"));
     jsonlPath = join(tmpDir, "session.jsonl");
-    console.log(`[tui] Writing JSONL to: ${jsonlPath}`);
+    console.log(`[session] Writing JSONL to: ${jsonlPath}`);
+  }
+
+  if (tuiEnabled && jsonlPath !== undefined) {
     console.log("[tui] Spawning emerge-tui live...");
     tuiProcess = spawnTui(jsonlPath);
     // Give the TUI a moment to start watching the file
     await new Promise<void>((resolve) => setTimeout(resolve, 200));
+  }
+
+  if (dashboardEnabled && jsonlPath !== undefined) {
+    console.log("[dashboard] Spawning emerge-dashboard live...");
+    dashboardProcess = spawnDashboard(jsonlPath);
+    // Give the dashboard server a moment to start
+    await new Promise<void>((resolve) => setTimeout(resolve, 500));
+    console.log("[dashboard] Open: http://127.0.0.1:7777");
   }
 
   console.log("=== M3c2.5 topology-supervisor-worker demo ===\n");
@@ -753,6 +792,17 @@ async function main() {
     // Give the TUI a moment to render the final state
     await new Promise<void>((resolve) => setTimeout(resolve, 500));
     tuiProcess.kill("SIGTERM");
+  }
+
+  // Clean up dashboard process if spawned
+  if (dashboardProcess !== undefined) {
+    console.log("\n[dashboard] Demo complete. The dashboard server is still running.");
+    console.log("[dashboard] Press Ctrl+C in the dashboard terminal to stop it.");
+    // Don't kill the dashboard — the user wants to keep browsing
+    // Signal it to clean up after a short delay
+    setTimeout(() => {
+      dashboardProcess?.kill("SIGTERM");
+    }, 5000);
   }
 
   process.exit(0);

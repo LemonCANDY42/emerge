@@ -1,0 +1,20 @@
+{
+  "name": "@emerge/example-dashboard-hello",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -b",
+    "typecheck": "tsc -b",
+    "clean": "rm -rf dist *.tsbuildinfo"
+  },
+  "dependencies": {
+    "@emerge/agents": "workspace:*",
+    "@emerge/kernel": "workspace:*",
+    "@emerge/provider-mock": "workspace:*",
+    "@emerge/replay": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0"
+  }
+}

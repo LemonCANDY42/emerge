@@ -1,0 +1,18 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "dist",
+    "composite": true,
+    "tsBuildInfoFile": "dist/.tsbuildinfo",
+    "types": ["node"],
+    "moduleResolution": "NodeNext"
+  },
+  "include": ["src/**/*"],
+  "references": [
+    { "path": "../../packages/kernel" },
+    { "path": "../../packages/agents" },
+    { "path": "../../packages/providers/mock" },
+    { "path": "../../packages/replay" }
+  ]
+}
