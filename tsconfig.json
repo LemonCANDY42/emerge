@@ -19,6 +19,9 @@
     { "path": "./packages/artifacts-local-fs" },
     { "path": "./packages/workspaces-git-worktree" },
     { "path": "./packages/agents" },
-    { "path": "./examples/topology-supervisor-worker" }
+    { "path": "./examples/topology-supervisor-worker" },
+    { "path": "./packages/tools-mcp" },
+    { "path": "./examples/eval-probes" },
+    { "path": "./examples/hello-mcp" }
   ]
 }

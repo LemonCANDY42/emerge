@@ -49,6 +49,26 @@ import { InMemoryCostMeter } from "./cost-meter.js";
 import { InMemoryLineageGuard } from "./lineage-guard.js";
 import { QuotaRouter } from "./quota-router.js";
 import { Scheduler } from "./scheduler.js";
+import { SchemaAdapterRegistry } from "./schema-adapter.js";
+
+/**
+ * Post-step verification config. Opt-in: costs an extra provider round-trip per step.
+ *
+ * mode "off"        — no verification (default)
+ * mode "per-step"   — auto-invoke the configured verifier after each completed step
+ * mode "on-failure" — invoke only when the agent's tool call returned an error
+ *
+ * verifier defaults to config.roles.adjudicator when undefined.
+ * timeoutMs defaults to 5000 (milliseconds to wait for a verdict before proceeding).
+ * See ADR 0032.
+ */
+export interface VerificationConfig {
+  readonly mode: "off" | "per-step" | "on-failure";
+  /** AgentId of the verifier; defaults to KernelConfig.roles.adjudicator. */
+  readonly verifier?: AgentId;
+  /** Milliseconds to wait for a verdict before proceeding. Default: 5000. */
+  readonly timeoutMs?: number;
+}
 
 export interface KernelDeps {
   modeRegistry?: ModeRegistry | undefined;
@@ -62,6 +82,8 @@ export interface KernelDeps {
   memory?: Memory | undefined;
   sandbox?: Sandbox | undefined;
   surveillance?: Surveillance | undefined;
+  /** M3b: opt-in post-step verification via the Adjudicator role. */
+  verification?: VerificationConfig | undefined;
   /**
    * Used when reproducibility === "record-replay".
    *
@@ -93,6 +115,15 @@ class SimpleToolRegistry implements ToolRegistry {
   private readonly tools = new Map<string, Tool>();
 
   register(tool: Tool): void {
+    // C5: reject duplicate tool names with a typed error instead of silently overwriting
+    if (this.tools.has(tool.spec.name)) {
+      throw Object.assign(
+        new Error(
+          `Tool "${tool.spec.name}" is already registered. Duplicate tool names are not allowed.`,
+        ),
+        { code: "E_TOOL_DUPLICATE" },
+      );
+    }
     this.tools.set(tool.spec.name, tool);
   }
   unregister(name: string): void {
@@ -283,6 +314,8 @@ export class Kernel {
   private _verdictSubscriptionCleanup: (() => void) | undefined = undefined;
   /** C1: One-time warn flag — emitted when no adjudicator is configured. */
   private _warnedNoAdjudicator = false;
+  /** M3b: schema adapter registry — adapts ToolSpec JSON schemas per provider. */
+  private readonly schemaAdapterRegistry = new SchemaAdapterRegistry();
 
   constructor(config: KernelConfig, deps: KernelDeps = {}) {
     if (config.lineage.maxDepth < 1) {
@@ -324,6 +357,24 @@ export class Kernel {
 
   mountMemory(m: Memory): void {
     this.memory = m;
+  }
+
+  /**
+   * M3b: Register a per-provider JSON schema adapter.
+   * The adapter is applied when serializing tool specs for provider invocations.
+   * Pass the provider id this adapter targets (e.g. "anthropic", "mock").
+   * Use SchemaAdapterRegistry.adapt() directly for advanced routing.
+   */
+  mountSchemaAdapter(
+    providerId: string,
+    adapter: import("./schema-adapter.js").SchemaAdapter,
+  ): void {
+    this.schemaAdapterRegistry.mount(providerId, adapter);
+  }
+
+  /** M3b: Expose the adapter registry for the agent-runner. */
+  getSchemaAdapterRegistry(): SchemaAdapterRegistry {
+    return this.schemaAdapterRegistry;
   }
 
   /**
@@ -549,6 +600,9 @@ export class Kernel {
       surveillanceNotify,
       lineageMaxDepth: this.config.lineage.maxDepth,
       experienceLibrary: this.experienceLibrary,
+      schemaAdapterRegistry: this.schemaAdapterRegistry,
+      verification: this.deps.verification,
+      adjudicatorId: this.config.roles.adjudicator,
     });
 
     this.handles.set(spec.id, runner);

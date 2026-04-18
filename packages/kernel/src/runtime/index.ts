@@ -12,3 +12,11 @@ export type { AgentRunnerDeps } from "./agent-runner.js";
 export type { SchedulerAgentState, StepResult } from "./scheduler.js";
 export { runDecomposition } from "./decomposition.js";
 export type { DecompositionInput, DecompositionResult } from "./decomposition.js";
+export {
+  SchemaAdapterRegistry,
+  defaultAdapter,
+  anthropicAdapter,
+  openaiAdapter,
+} from "./schema-adapter.js";
+export type { SchemaAdapter } from "./schema-adapter.js";
+export { applyTruncationNotice, maybeApplyTruncationNotice } from "./truncation.js";

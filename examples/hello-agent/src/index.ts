@@ -13,7 +13,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { AgentId, ProviderEvent, SessionId } from "@emerge/kernel/contracts";
-import { Kernel } from "@emerge/kernel/runtime";
+import { Kernel, anthropicAdapter } from "@emerge/kernel/runtime";
 import { BuiltinModeRegistry, permissionPolicyForMode } from "@emerge/modes";
 import { MockProvider } from "@emerge/provider-mock";
 import { makeRecorder } from "@emerge/replay";
@@ -118,6 +118,11 @@ async function main() {
   );
 
   kernel.mountProvider(provider);
+
+  // M6: mount the Anthropic schema adapter so tool specs are shaped correctly
+  // when swapping in a real Anthropic provider. Logs activation for verification.
+  kernel.mountSchemaAdapter(provider.capabilities.id, anthropicAdapter);
+  console.log(`[hello-agent] schema adapter active for ${provider.capabilities.id}`);
 
   const sessionId = `hello-${Date.now()}` as SessionId;
   const contractId = "hello-contract" as never;

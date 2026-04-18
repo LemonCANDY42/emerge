@@ -1,6 +1,11 @@
 /**
  * AnthropicProvider — adapter for the Anthropic SDK.
+ * M3b: exports the recommended schema adapter for Anthropic tool-use.
  */
+
+// M3b: export the Anthropic-tuned schema adapter so consumers can mount it in one line:
+//   kernel.mountSchemaAdapter(provider.capabilities.id, anthropicSchemaAdapter)
+export { anthropicAdapter as anthropicSchemaAdapter } from "@emerge/kernel/runtime";
 
 import Anthropic from "@anthropic-ai/sdk";
 import type {

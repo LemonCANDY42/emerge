@@ -16,6 +16,7 @@ import type {
   ToolInvocation,
   ToolResult,
 } from "@emerge/kernel/contracts";
+import { applyTruncationNotice } from "@emerge/kernel/runtime";
 import { z } from "zod";
 
 void createReadStream;
@@ -63,15 +64,18 @@ export function makeFsReadTool(sandbox: Sandbox): Tool {
       );
       if (!result.ok) return result;
       const text = result.value;
-      const preview = text.slice(0, 2000) + (text.length > 2000 ? "\n...[truncated]" : "");
+      const PREVIEW_LIMIT = 2000;
+      const preview = text.slice(0, PREVIEW_LIMIT);
+      const base: ToolResult = {
+        ok: true,
+        preview,
+        sizeBytes: text.length,
+        mediaType: "text/plain",
+      };
+      // M3b: apply truncation notice when content exceeds the preview window
       return {
         ok: true,
-        value: {
-          ok: true,
-          preview,
-          sizeBytes: text.length,
-          mediaType: "text/plain",
-        },
+        value: applyTruncationNotice(base, text.length, preview.length),
       };
     },
   };
