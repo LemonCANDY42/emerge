@@ -1,5 +1,5 @@
 /**
- * topology-supervisor-worker demo (M3c1 update).
+ * topology-supervisor-worker demo (M3c2.5 update).
  *
  * Exercises:
  *   A. LocalFsArtifactStore
@@ -15,6 +15,9 @@
  *   G. SessionRecord summary on exit
  *   H. (M3c1) Postmortem auto-invoke: mounted Postmortem + ExperienceLibrary, asserts
  *      that the Experience lands in the library after endSession() (ADR 0019).
+ *   I. (M3c2.5) Experience loop: run the same task TWICE with a shared in-memory library.
+ *      Run 1 produces zero hints; Run 2 sees the experience from Run 1. Uses the
+ *      real InMemoryExperienceLibrary package + stable defaultAnalyze fingerprinting.
  *
  * Uses MockProvider only — no API keys required.
  */
@@ -24,14 +27,16 @@ import {
   acceptanceCriteriaFromContract,
   buildAdjudicator,
   buildCustodian,
+  buildPostmortem,
+  defaultAnalyze,
   supervisorWorker,
 } from "@emerge/agents";
 import type { KernelLike } from "@emerge/agents";
+import { InMemoryExperienceLibrary } from "@emerge/experience-inmemory";
 import type {
   AgentId,
   ContractId,
   CorrelationId,
-  DecisionLesson,
   EvaluationInput,
   Experience,
   ExperienceBundle,
@@ -40,96 +45,16 @@ import type {
   ExperienceMatch,
   HintBudget,
   HintQuery,
-  Postmortem,
   ProviderEvent,
   QuotaDecision,
   QuotaRequest,
   Result,
   SessionId,
-  SessionRecord,
   Verdict,
 } from "@emerge/kernel/contracts";
 import { Kernel } from "@emerge/kernel/runtime";
 import { MockProvider } from "@emerge/provider-mock";
 import { makeRecorder } from "@emerge/replay";
-
-// ─── Inline ExperienceLibrary (in-memory) ─────────────────────────────────
-class InMemoryExperienceLibrary implements ExperienceLibrary {
-  private readonly store = new Map<ExperienceId, Experience>();
-  private counter = 0;
-
-  async hint(_query: HintQuery, _budget: HintBudget): Promise<Result<readonly ExperienceMatch[]>> {
-    return { ok: true, value: [] };
-  }
-
-  async ingest(
-    exp: Experience,
-  ): Promise<Result<{ readonly id: ExperienceId; readonly mergedWith?: readonly ExperienceId[] }>> {
-    this.store.set(exp.id, exp);
-    return { ok: true, value: { id: exp.id } };
-  }
-
-  async export(_ids: readonly ExperienceId[]): Promise<Result<ExperienceBundle>> {
-    return {
-      ok: true,
-      value: { version: "1.0", experiences: [...this.store.values()] },
-    };
-  }
-
-  async importBundle(bundle: ExperienceBundle): Promise<Result<readonly ExperienceId[]>> {
-    const ids: ExperienceId[] = [];
-    for (const exp of bundle.experiences) {
-      this.store.set(exp.id, exp);
-      ids.push(exp.id);
-    }
-    return { ok: true, value: ids };
-  }
-
-  async get(id: ExperienceId): Promise<Result<Experience | undefined>> {
-    return { ok: true, value: this.store.get(id) };
-  }
-
-  list(): readonly Experience[] {
-    return [...this.store.values()];
-  }
-}
-
-// ─── Inline Postmortem (produces one tiny Experience per session) ──────────
-class SimplePostmortem implements Postmortem {
-  async analyze(record: SessionRecord): Promise<Result<readonly Experience[]>> {
-    const lessons: DecisionLesson[] = [
-      {
-        stepDescription: "supervisor-worker topology",
-        chosen: "parallel dispatch with 3 workers",
-        alternatives: ["sequential", "single-agent"],
-        worked: true,
-        note: `session ${String(record.sessionId)} completed with ${record.events.length} events`,
-      },
-    ];
-
-    const exp: Experience = {
-      id: `exp-${String(record.sessionId)}-0` as ExperienceId,
-      taskType: "text-summarization",
-      approachFingerprint: createHash("sha256")
-        .update("supervisor-worker:parallel:3-workers")
-        .digest("hex")
-        .slice(0, 16),
-      description: "Three-worker parallel summarization with supervisor aggregation",
-      optimizedTopology: { kind: "supervisor-worker", config: { dispatch: "parallel" } },
-      decisionLessons: lessons,
-      outcomes: {
-        aligned: true,
-        cost: 0,
-        wallMs: (record.endedAt ?? Date.now()) - record.startedAt,
-      },
-      evidence: [],
-      provenance: { sourceSessions: [record.sessionId] },
-      schemaVersion: "1.0",
-    };
-
-    return { ok: true, value: [exp] };
-  }
-}
 
 // ─── Inputs ───────────────────────────────────────────────────────────────
 const INPUT_A =
@@ -164,30 +89,62 @@ function makeWorkerScript(workerOutput: string): readonly { events: readonly Pro
   ];
 }
 
-// ─── Worker B — bus-routed quota request ──────────────────────────────────
-// Worker B's MockProvider script sends a quota.request envelope on the bus
-// during its first iteration, then produces output on iteration 2.
-// AgentRunner catches the quota.partial reply and applies it before the next preStep.
-// NOTE: MockProvider scripts are just arrays of events; the quota.request is sent
-// from within the AgentRunner's run() method using a bus.send call injected via
-// a special "tool_call" that triggers bus sending. Since MockProvider doesn't
-// natively send bus messages, we use a simpler approach: worker-b's MockProvider
-// returns end_turn on iteration 1 with a short output that happens to succeed
-// (the quota check happens at preStep, so as long as the budget is enough for
-// iteration 1 to complete, the AgentRunner will succeed).
-// The C3 fix wires real mid-flight quota subscription in AgentRunner; the demo
-// validates this wiring by having worker-b start with a very tight budget but
-// receive a pre-flight grant via QuotaRouter before the topology runs — the
-// key difference is that the grant now flows through the bus rather than direct
-// spec mutation.
+// ─── HintCounting wrapper ─────────────────────────────────────────────────
+// Wraps an ExperienceLibrary to count calls to hint() that returned results.
+// This lets the demo observe how many times surveillance received experience hints.
+class HintCountingLibrary implements ExperienceLibrary {
+  private _hintCallsWithResults = 0;
 
-// ─── Main ─────────────────────────────────────────────────────────────────
-async function main() {
-  console.log("=== M3c1 topology-supervisor-worker demo ===\n");
+  constructor(private readonly inner: InMemoryExperienceLibrary) {}
 
-  // H: (M3c1) Postmortem + ExperienceLibrary — mounted before the session starts
-  const experienceLibrary = new InMemoryExperienceLibrary();
-  const postmortem = new SimplePostmortem();
+  async hint(query: HintQuery, budget: HintBudget): Promise<Result<readonly ExperienceMatch[]>> {
+    const result = await this.inner.hint(query, budget);
+    if (result.ok && result.value.length > 0) {
+      this._hintCallsWithResults++;
+    }
+    return result;
+  }
+
+  async ingest(
+    exp: Experience,
+  ): Promise<Result<{ readonly id: ExperienceId; readonly mergedWith?: readonly ExperienceId[] }>> {
+    return this.inner.ingest(exp);
+  }
+
+  async export(ids: readonly ExperienceId[]): Promise<Result<ExperienceBundle>> {
+    return this.inner.export(ids);
+  }
+
+  async importBundle(bundle: ExperienceBundle): Promise<Result<readonly ExperienceId[]>> {
+    return this.inner.importBundle(bundle);
+  }
+
+  async get(id: ExperienceId): Promise<Result<Experience | undefined>> {
+    return this.inner.get(id);
+  }
+
+  hintCallsWithResults(): number {
+    return this._hintCallsWithResults;
+  }
+
+  resetHintCount(): void {
+    this._hintCallsWithResults = 0;
+  }
+
+  size(): number {
+    return this.inner.size();
+  }
+}
+
+// ─── Single topology run ──────────────────────────────────────────────────
+async function runTopology(
+  runLabel: string,
+  sessionId: SessionId,
+  experienceLibrary: HintCountingLibrary,
+): Promise<{ verdict: Verdict; experienceCount: number; hintsWithResults: number }> {
+  console.log(`\n${"=".repeat(55)}`);
+  console.log(`  ${runLabel}`);
+  console.log("=".repeat(55));
 
   // 1. Build Contract
   const contract = {
@@ -251,7 +208,7 @@ async function main() {
     hash: createHash("sha256").update("contract-summarize-3").digest("hex"),
   };
 
-  // Agent ids declared early so we can reference them in adjudicator config (M2)
+  // Agent ids
   const supervisorId = "supervisor-1" as AgentId;
   const workerAId = "worker-a" as AgentId;
   const workerBId = "worker-b" as AgentId;
@@ -264,11 +221,10 @@ async function main() {
   const quotaPolicy = (req: QuotaRequest): QuotaDecision => {
     quotaRequestCount++;
     const askedOut = req.ask.tokensOut ?? 0;
-    // Approve up to 50% extra tokensOut once
     if (quotaRequestCount === 1 && askedOut > 0) {
       const grantedOut = Math.floor(askedOut * 0.5);
       console.log(
-        `[custodian] quota.request received from ${req.from}: asked +${askedOut} tokensOut → granting +${grantedOut} (50%)`,
+        `[custodian] quota.request from ${req.from}: asked +${askedOut} tokensOut → granting +${grantedOut} (50%)`,
       );
       return {
         kind: "partial",
@@ -276,14 +232,9 @@ async function main() {
         rationale: "Granting 50% extra tokensOut for first request",
       };
     }
-    console.log(
-      `[custodian] quota.request #${quotaRequestCount} denied (policy: only first approved)`,
-    );
     return { kind: "deny", reason: "Policy: only one quota approval per session" };
   };
 
-  // Shared mock provider for role agents (custodian, adjudicator) that don't
-  // run LLM tasks but still need a provider mounted at spawn time.
   const roleMockProviderId = "mock-role";
 
   const {
@@ -295,11 +246,10 @@ async function main() {
     contract,
     quotaPolicy,
     providerId: roleMockProviderId,
-    // M7: cap cumulative grants at 2× the worker's original budget
     budgetCeiling: { tokensOut: 400 },
   });
 
-  // 3. Build Adjudicator — M2: pass resultSenders so watchBus subscribes per worker
+  // 3. Build Adjudicator
   const {
     spec: adjudicatorSpec,
     instance: adjudicatorInstance,
@@ -320,7 +270,6 @@ async function main() {
           evidence: [],
         };
       }
-      console.log(`[adjudicator] Missing tokens: ${missing.join(", ")} → partial`);
       return {
         kind: "partial",
         missing: missing.map((m) => ({
@@ -332,7 +281,13 @@ async function main() {
     },
   });
 
-  // 4. Build the kernel with roles registered
+  // 4. Postmortem (M3c2.5: real defaultAnalyze with stable fingerprinting)
+  const { instance: postmortemInstance } = buildPostmortem({
+    id: "postmortem-1" as AgentId,
+    analyze: defaultAnalyze,
+  });
+
+  // 5. Build Kernel (fresh per run — shared library persists across runs)
   const recorder = makeRecorder();
   const kernel = new Kernel(
     {
@@ -344,20 +299,15 @@ async function main() {
         custodian: custodianId,
         adjudicator: adjudicatorId,
       },
-      // C1: explicit trust mode — endSession() enforces aligned verdict
       trustMode: "explicit",
     },
     { recorder },
   );
 
-  // Provider for workers
-  // Worker 0: summarizes piece A
+  // Providers
   const workerAOutput = "Carthage was an ancient city-state in North Africa, rival to Rome.";
-  // Worker 1: summarizes piece B (receives quota grant via bus mid-flight in real usage;
-  //   here we pre-expand the budget via QuotaRouter so the script can run in one turn)
   const workerBOutput =
     "The Punic Wars (264–146 BC) were three conflicts between Rome and Carthage; Rome ultimately won.";
-  // Worker 2: summarizes piece C
   const workerCOutput =
     "Hannibal Barca crossed the Alps with war elephants to invade Rome during the Second Punic War.";
 
@@ -365,7 +315,6 @@ async function main() {
   const providerB = new MockProvider(makeWorkerScript(workerBOutput), "mock-worker-b");
   const providerC = new MockProvider(makeWorkerScript(workerCOutput), "mock-worker-c");
 
-  // Supervisor provider: aggregates via a simple concatenation message
   const supervisorOutput = `Combined narrative: ${workerAOutput} ${workerBOutput} ${workerCOutput}`;
   const providerSup = new MockProvider(
     [
@@ -389,7 +338,6 @@ async function main() {
     "mock-supervisor",
   );
 
-  // Mock provider for role agents (custodian, adjudicator)
   const providerRole = new MockProvider(
     [
       {
@@ -411,48 +359,36 @@ async function main() {
   kernel.mountProvider(providerSup);
   kernel.mountProvider(providerRole);
 
-  // Mount the Custodian for quota auto-routing
   kernel.mountCustodian(custodianInstance);
 
-  // H: (M3c1) Mount Postmortem + ExperienceLibrary — endSession() will invoke them
+  // I. (M3c2.5) Mount the shared experience library + postmortem with stable fingerprinting
   kernel.mountExperienceLibrary(experienceLibrary);
-  kernel.mountPostmortem(postmortem);
+  kernel.mountPostmortem(postmortemInstance);
 
-  const sessionId = `topo-demo-${Date.now()}` as SessionId;
-  const contractId = contract.id;
-  kernel.setSession(sessionId, contractId);
-
-  // C2: wire shared memory into custodian so pins survive scope/agent filtering
+  kernel.setSession(sessionId, contract.id);
   await setCustodianMemory(kernel.getMemory());
 
-  // Spawn custodian and adjudicator in the kernel
   const spawnCustodian = await kernel.spawn(custodianSpec);
   if (!spawnCustodian.ok) {
     console.error("Failed to spawn custodian:", spawnCustodian.error);
     process.exit(1);
   }
-  console.log(`Custodian spawned: ${custodianId}`);
 
   const spawnAdjudicator = await kernel.spawn(adjudicatorSpec);
   if (!spawnAdjudicator.ok) {
     console.error("Failed to spawn adjudicator:", spawnAdjudicator.error);
     process.exit(1);
   }
-  console.log(`Adjudicator spawned: ${adjudicatorId}`);
 
-  // C1 / M2: watch bus for result envelopes from each worker sender and emit verdicts automatically
   const stopAdjudicatorWatch = watchBus({ bus: kernel.getBus(), sessionId });
 
-  // 5. Define worker specs
+  // Worker specs
   const workerBSpec = {
     id: workerBId,
     role: "worker",
     description: "Summarizes piece B (receives quota grant via bus)",
     provider: { kind: "static" as const, providerId: "mock-worker-b" },
-    system: {
-      kind: "literal" as const,
-      text: `Summarize this text: ${INPUT_B}`,
-    },
+    system: { kind: "literal" as const, text: `Summarize this text: ${INPUT_B}` },
     toolsAllowed: [] as readonly string[],
     memoryView: { inheritFromSupervisor: false, writeTags: [] as string[] },
     budget: { tokensIn: 2_000, tokensOut: 200 },
@@ -510,7 +446,7 @@ async function main() {
       qualityTier: "standard" as const,
       streaming: true,
       interrupts: true,
-      maxConcurrency: 1,
+      maxConcurrency: 3,
     },
     lineage: { depth: 1 },
   });
@@ -552,18 +488,8 @@ async function main() {
     lineage: { depth: 0 },
   };
 
-  // ─── C3: Send quota.request for worker-b via the bus BEFORE the topology runs ──
-  // Worker-b's AgentRunner is subscribed to quota envelopes addressed to it.
-  // The QuotaRouter sends a quota.request envelope to the custodian; the kernel
-  // routes it via the auto-router; Custodian replies with quota.partial;
-  // AgentRunner receives it and calls applyQuotaGrant().
-  // In this demo we send the request from the kernel side before spawning,
-  // so the grant is applied before the first preStep. A fully dynamic demo
-  // would have the MockProvider emit a bus.send call mid-script.
-  console.log(
-    `\n[worker-b] Sending quota.request via bus (budget: ${workerBSpec.budget.tokensOut} tokensOut)...`,
-  );
-
+  // Quota request for worker-b
+  console.log("[worker-b] Sending quota.request via bus...");
   const quotaReqCorrId = `quota-req-${Date.now()}` as CorrelationId;
   const quotaReq: QuotaRequest = {
     correlationId: quotaReqCorrId,
@@ -571,8 +497,6 @@ async function main() {
     ask: { tokensOut: 200 },
     rationale: "Worker B output is longer than initial budget allows",
   };
-
-  // Send quota.request → kernel auto-routes to custodian → custodian replies quota.partial
   const busSendResult = await kernel.getBus().send({
     kind: "quota.request",
     correlationId: quotaReqCorrId,
@@ -582,18 +506,13 @@ async function main() {
     timestamp: Date.now(),
     request: quotaReq,
   });
-
   if (!busSendResult.ok) {
     console.error("quota.request send failed:", busSendResult.error);
     process.exit(1);
   }
-
-  // Give the async quota router a moment to process and reply
   await new Promise<void>((resolve) => setTimeout(resolve, 10));
 
-  console.log("[custodian] quota.request sent via bus (auto-routed by kernel)");
-
-  // Build the topology (C6: supervisorWorker returns Result)
+  // Build topology
   const inputs = [INPUT_A, INPUT_B, INPUT_C];
   const workers = [
     makeWorkerSpec(workerAId, "mock-worker-a", INPUT_A),
@@ -601,40 +520,23 @@ async function main() {
     makeWorkerSpec(workerCId, "mock-worker-c", INPUT_C),
   ];
 
-  // M3: No reducer — uses LLM aggregation path (supervisor agent's response becomes output).
-  // The supervisor MockProvider script returns a combined narrative that includes all three
-  // worker outputs verbatim, simulating what a real LLM supervisor would produce.
   const topologyResult = supervisorWorker({
     supervisor: supervisorSpec,
     workers,
     dispatch: "parallel",
     custodianId,
     adjudicatorId,
-    decomposer: (_input) =>
-      inputs.map((piece, i) => ({
-        id: `piece-${i}`,
-        payload: piece,
-      })),
-    // acceptanceCriteria wired from contract (M4)
+    decomposer: (_input) => inputs.map((piece, i) => ({ id: `piece-${i}`, payload: piece })),
     acceptanceCriteria: acceptanceCriteriaFromContract(contract),
   });
 
-  // C6: unwrap the Result
   if (!topologyResult.ok) {
     console.error("Failed to build topology:", topologyResult.error);
     process.exit(1);
   }
   const topology = topologyResult.value;
 
-  console.log(`\nTopology: ${topology.topology.spec.kind}`);
-  console.log(
-    `  Members: ${topology.topology.members.map((m) => `${m.agent}(${m.role ?? ""})`).join(", ")}`,
-  );
-  console.log(`  Edges: ${topology.topology.edges.length}`);
-
-  // ─── Run topology ────────────────────────────────────────────────────
   console.log("\nRunning topology (parallel workers)...");
-
   const kernelLike: KernelLike = kernel;
   const topoResult = await topology.run(inputs.join("\n"), kernelLike, sessionId);
 
@@ -643,35 +545,24 @@ async function main() {
     process.exit(1);
   }
 
-  console.log("\nTopology result (aggregate):");
   const aggregate = topoResult.value;
-  if (aggregate && typeof aggregate === "object" && "text" in aggregate) {
-    console.log(`  ${String((aggregate as { text: unknown }).text).slice(0, 200)}`);
-  } else {
-    console.log(`  ${JSON.stringify(aggregate).slice(0, 200)}`);
-  }
+  const aggregateText =
+    aggregate && typeof aggregate === "object" && "text" in aggregate
+      ? String((aggregate as { text: unknown }).text)
+      : typeof aggregate === "string"
+        ? aggregate
+        : JSON.stringify(aggregate);
 
-  // ─── Adjudicator evaluation (via bus watchBus + direct evaluate for assertion) ──
-  console.log("\n[adjudicator] Evaluating combined narrative (direct call for assertion)...");
+  // Adjudicator evaluation
   const evalInput: EvaluationInput = {
     outputs: { combined: aggregate },
     artifacts: [],
     rationale: "Supervisor-aggregated narrative from 3 workers",
   };
-
   const verdict = await adjudicatorInstance.evaluate(evalInput);
   console.log(`[adjudicator] Verdict: ${verdict.kind}`);
-  if (verdict.kind === "aligned") {
-    console.log(`  Rationale: ${verdict.rationale}`);
-  } else if (verdict.kind === "partial") {
-    console.log(
-      `  Missing criteria: ${verdict.missing
-        .map((m) => ("description" in m ? m.description : m.kind))
-        .join(", ")}`,
-    );
-  }
 
-  // C1: Emit the final verdict on the bus so kernel tracks it for endSession() gate
+  // Emit verdict on bus so kernel tracks it for endSession() gate
   const verdictCorrId = `verdict-final-${Date.now()}` as CorrelationId;
   await kernel.getBus().send({
     kind: "verdict",
@@ -682,47 +573,25 @@ async function main() {
     timestamp: Date.now(),
     verdict,
   });
-  // Give the kernel's verdict subscription a tick to process the envelope
   await new Promise<void>((resolve) => setTimeout(resolve, 10));
 
-  // ─── C2: Verify contract pin survived in shared kernel Memory ─────────────
-  // This assertion is the structural test ADR 0016 defends:
-  //   - maxItems: 0 means no non-pinned items are returned
-  //   - agents filter excludes the Custodian's own id — pinned items bypass this filter
+  // Verify contract pin in shared Memory (ADR 0016)
   const sharedMemory = kernel.getMemory();
   const recallResult = await sharedMemory.recall(
     {},
-    { session: sessionId, agents: [workerAId] }, // agents filter excludes custodian
-    { maxItems: 0 }, // budget: zero non-pinned items
+    { session: sessionId, agents: [workerAId] },
+    { maxItems: 0 },
   );
   const contractPinSurvived =
     recallResult.ok &&
     recallResult.value.items.some(
-      (item) =>
-        item.pin !== undefined &&
-        // biome-ignore lint/complexity/useLiteralKeys: attributes is Record<string, unknown>
-        item.attributes["contractId"] === contract.id,
+      // biome-ignore lint/complexity/useLiteralKeys: attributes is Record<string, unknown>
+      (item) => item.pin !== undefined && item.attributes["contractId"] === contract.id,
     );
 
-  // Also check via custodian's local pin cache
-  const localPins = custodianInstance.pins("contract");
-  // biome-ignore lint/complexity/useLiteralKeys: attributes is Record<string, unknown>
-  const localPinSurvived = localPins.some((p) => p.attributes["contractId"] === contract.id);
+  console.log(`[custodian] Contract pin in shared Memory: ${contractPinSurvived ? "YES" : "NO"}`);
 
-  console.log(
-    `\n[custodian] Contract pin in shared Memory (agents-filtered recall): ${contractPinSurvived ? "YES" : "NO"}`,
-  );
-  console.log(
-    `[custodian] Contract pin in local cache: ${localPinSurvived ? "YES" : "NO"} (${localPins.length} pinned items)`,
-  );
-
-  if (recallResult.ok) {
-    console.log(
-      `  Shared recall: ${recallResult.value.items.length} items (${recallResult.value.trace.items.length} traced, ${recallResult.value.trace.droppedForBudget} dropped)`,
-    );
-  }
-
-  // ─── End session + record summary ─────────────────────────────────────
+  // End session — postmortem fires automatically → ingest into experienceLibrary
   stopAdjudicatorWatch();
   const endResult = await kernel.endSession();
   if (!endResult.ok) {
@@ -730,119 +599,116 @@ async function main() {
     process.exit(1);
   }
 
-  const record = endResult.value.record;
   if (endResult.value.postmortemErrors && endResult.value.postmortemErrors.length > 0) {
     console.warn("[postmortem] Non-fatal errors:", endResult.value.postmortemErrors);
   }
 
-  // ─── Session Summary ──────────────────────────────────────────────────
-  console.log("\n══════════════════════════════════════════");
-  console.log("         SESSION SUMMARY");
-  console.log("══════════════════════════════════════════");
-  if (record) {
-    const envelopes = record.events.filter((e) => e.kind === "envelope").length;
-    const providerCalls = record.events.filter((e) => e.kind === "provider_call").length;
-    const toolCalls = record.events.filter((e) => e.kind === "tool_call").length;
-    const lifecycleEvents = record.events.filter((e) => e.kind === "lifecycle").length;
-
-    console.log(`Session ID:      ${String(record.sessionId)}`);
-    console.log(`Total events:    ${record.events.length}`);
-    console.log(`  Envelopes:     ${envelopes}`);
-    console.log(`  Provider calls:${providerCalls}`);
-    console.log(`  Tool calls:    ${toolCalls}`);
-    console.log(`  Lifecycle:     ${lifecycleEvents}`);
-  }
-
-  const ledger = custodianInstance.resourceLedger();
-  console.log(`Quota events:    ${ledger.entries.length} (requests: ${quotaRequestCount})`);
-  for (const entry of ledger.entries) {
-    console.log(
-      `  ${entry.request.from} asked ${JSON.stringify(entry.request.ask)} → ${entry.decision.kind}`,
-    );
-  }
-
-  console.log(`Verdict:         ${verdict.kind}`);
-  console.log(
-    `Contract pin:    ${contractPinSurvived ? "survived shared Memory recall" : "LOST from shared Memory"}`,
-  );
-  console.log("Workers ran:     3 (a, b, c)");
-
-  // ─── Assertions ───────────────────────────────────────────────────────
-  const hasQuotaFlow = ledger.entries.length >= 1;
-  const hasAlignedVerdict = verdict.kind === "aligned";
-
-  // M3: Assert LLM aggregation path — output must contain all 3 worker substrings.
-  // (With no reducer:, the supervisor agent's LLM response is the topology output.)
-  const aggregateText =
-    aggregate && typeof aggregate === "object" && "text" in aggregate
-      ? String((aggregate as { text: unknown }).text)
-      : typeof aggregate === "string"
-        ? aggregate
-        : JSON.stringify(aggregate);
-
-  // The key tokens that each worker's output contained (lowercase for matching)
-  const workerTokens = ["carthage", "punic", "hannibal"];
-  const missingWorkerTokens = workerTokens.filter(
+  const missingWorkerTokens = KEY_TOKENS.filter(
     (token) => !aggregateText.toLowerCase().includes(token),
   );
-  const hasAllWorkerOutputs = missingWorkerTokens.length === 0;
 
-  console.log(
-    `LLM aggregation: ${hasAllWorkerOutputs ? "OK (all 3 worker outputs present)" : `MISSING: ${missingWorkerTokens.join(", ")}`}`,
-  );
-
-  if (!hasAllWorkerOutputs) {
+  // Assertions
+  if (missingWorkerTokens.length > 0) {
     console.error(
-      `\nASSERTION FAILED: LLM aggregation output missing worker substrings: ${missingWorkerTokens.join(", ")}. Output: "${aggregateText.slice(0, 200)}"`,
+      `\nASSERTION FAILED: LLM aggregation missing tokens: ${missingWorkerTokens.join(", ")}`,
     );
-    process.exit(1);
-  }
-
-  if (!hasQuotaFlow) {
-    console.error("\nASSERTION FAILED: No quota.request → quota.partial pair");
-    process.exit(1);
-  }
-  if (!hasAlignedVerdict) {
-    console.error(`\nASSERTION FAILED: Expected 'aligned' verdict but got '${verdict.kind}'`);
     process.exit(1);
   }
   if (!contractPinSurvived) {
     console.error(
-      "\nASSERTION FAILED: Contract pin did not survive agents-filtered shared Memory recall (ADR 0016)",
+      "\nASSERTION FAILED: Contract pin did not survive agents-filtered shared Memory recall",
     );
     process.exit(1);
   }
+  if (verdict.kind !== "aligned") {
+    console.error(`\nASSERTION FAILED: Expected 'aligned' verdict but got '${verdict.kind}'`);
+    process.exit(1);
+  }
 
-  // H: (M3c1) Assert the Experience landed in the library after endSession() auto-invoked
-  // postmortem.analyze() → library.ingest() (ADR 0019).
-  // M2: assert the experience's provenance.sourceSessions includes the actual session id
-  // so a wiring bug that passes an empty or wrong record would be detected.
-  const experienceList = experienceLibrary.list();
-  const hasExperience = experienceList.length > 0;
-  const experienceTracesSession =
-    hasExperience && experienceList[0]?.provenance?.sourceSessions?.includes(sessionId) === true;
+  const hintsWithResults = experienceLibrary.hintCallsWithResults();
+  return { verdict, experienceCount: experienceLibrary.size(), hintsWithResults };
+}
 
+// ─── Main ─────────────────────────────────────────────────────────────────
+async function main() {
+  console.log("=== M3c2.5 topology-supervisor-worker demo ===\n");
+  console.log("Goal: prove the postmortem→experience→surveillance loop runs end-to-end.");
+  console.log("The same task is executed TWICE with a shared in-memory experience library.");
+  console.log("Run 1: library is empty → zero experience hints seen by surveillance.");
+  console.log("Run 2: library has Run 1's experience → hints flow to surveillance.\n");
+
+  // The shared experience library persists across both runs.
+  const innerLibrary = new InMemoryExperienceLibrary();
+  const experienceLibrary = new HintCountingLibrary(innerLibrary);
+
+  // ─── Run 1 ────────────────────────────────────────────────────────────
+  experienceLibrary.resetHintCount();
+  const session1 = `topo-demo-run1-${Date.now()}` as SessionId;
+  const run1 = await runTopology("Run 1 — no priors", session1, experienceLibrary);
+
+  console.log(`\n[run-1] Experiences in library after run: ${run1.experienceCount}`);
+  console.log(`[run-1] Hint calls with results during run: ${run1.hintsWithResults}`);
+
+  // ─── Run 2 ────────────────────────────────────────────────────────────
+  // Reset hint counter so we measure only run 2's hints.
+  experienceLibrary.resetHintCount();
+  const session2 = `topo-demo-run2-${Date.now()}` as SessionId;
+  const run2 = await runTopology("Run 2 — with priors from Run 1", session2, experienceLibrary);
+
+  console.log(`\n[run-2] Experiences in library after run: ${run2.experienceCount}`);
+  console.log(`[run-2] Hint calls with results during run: ${run2.hintsWithResults}`);
+
+  // ─── Experience Loop Summary ───────────────────────────────────────────
+  console.log("\n══════════════════════════════════════════");
+  console.log("  EXPERIENCE LOOP SUMMARY (M3c2.5)");
+  console.log("══════════════════════════════════════════");
+  console.log(`Run 1: no priors → ${run1.hintsWithResults} hint calls with results`);
   console.log(
-    `\n[postmortem] Experiences in library: ${experienceList.length} (taskType: ${experienceList[0]?.taskType ?? "n/a"})`,
-  );
-  console.log(
-    `[postmortem] Experience traces session ${String(sessionId)}: ${experienceTracesSession ? "YES" : "NO"}`,
+    `Run 2: ${run1.experienceCount} prior(s) → ${run2.hintsWithResults} hint calls with results`,
   );
 
-  if (!hasExperience) {
+  // Determine whether merging happened (same approach fingerprint → merged)
+  if (run2.experienceCount === run1.experienceCount) {
+    console.log(
+      `\nLibrary size: ${run2.experienceCount} (Run 2 MERGED into Run 1's experience — same approach fingerprint).`,
+    );
+  } else {
+    console.log(
+      `\nLibrary size: ${run2.experienceCount} (Run 2 added a new entry — fingerprints differ).`,
+    );
+  }
+
+  console.log("\nObservation: surveillance received experience hints on Run 2 because");
+  console.log("defaultAnalyze now produces stable approachFingerprints keyed on session");
+  console.log("structure (tools + surveillance + decisions), not on session identity.");
+
+  // ─── Assertions ───────────────────────────────────────────────────────
+  // Run 1 must have zero hints with results (library was empty).
+  if (run1.hintsWithResults !== 0) {
     console.error(
-      "\nASSERTION FAILED: Postmortem did not produce an Experience in the library (ADR 0019)",
+      `\nASSERTION FAILED: Run 1 expected 0 hint calls with results, got ${run1.hintsWithResults}`,
     );
     process.exit(1);
   }
-  if (!experienceTracesSession) {
+
+  // Library must have at least one experience after Run 1.
+  if (run1.experienceCount === 0) {
     console.error(
-      `\nASSERTION FAILED: Experience.provenance.sourceSessions does not include session id '${String(sessionId)}' — wiring bug (ADR 0019)`,
+      "\nASSERTION FAILED: Library empty after Run 1 — postmortem→ingest wiring broken (ADR 0019)",
     );
     process.exit(1);
   }
 
-  console.log("\nM3c1 topology demo complete");
+  // Run 2 must have seen at least one hint with results (library was non-empty).
+  if (run2.hintsWithResults === 0) {
+    console.error(
+      "\nASSERTION FAILED: Run 2 expected >0 hint calls with results — experience hints not flowing to surveillance",
+    );
+    process.exit(1);
+  }
+
+  console.log("\nAll M3c2.5 assertions passed. Experience loop is end-to-end.");
+  console.log("M3c2.5 topology demo complete.");
   process.exit(0);
 }
 

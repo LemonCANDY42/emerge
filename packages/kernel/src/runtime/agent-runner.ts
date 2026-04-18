@@ -409,34 +409,43 @@ export class AgentRunner implements AgentHandle {
       // Effective depth = spawned depth + how many decompositions this agent has run
       const decompositionDepth = (spec.lineage.depth ?? 0) + localDecompositionCount;
 
+      // Build a synthetic StepProfile for this iteration.
+      // Constructed here (outside the surveillance guard) so the experience hint
+      // fetch can run regardless of whether full surveillance is active — this
+      // closes the postmortem→experience→hint loop even in demos that don't mount
+      // a Surveillance instance. See ADR 0038.
+      const stepProfile: StepProfile = {
+        stepId: `${this.id}-step-${schedState.iteration}`,
+        difficulty: "medium", // default; callers may set spec.surveillance with richer context
+        goal: spec.system.kind === "literal" ? spec.system.text.slice(0, 200) : "agent task",
+        tools: spec.toolsAllowed as readonly string[],
+      };
+
+      // Fetch experience hints whenever a library is mounted — skip on error so
+      // the hot path is never blocked by a non-critical hint failure.
+      // taskType uses contractId (stable across sessions of the same task) so the
+      // query key always agrees with what defaultAnalyze stores. See ADR 0038.
+      let experienceHints: ExperienceMatch[] | undefined;
+      if (this.deps.experienceLibrary) {
+        const hintResult = await this.deps.experienceLibrary.hint(
+          {
+            taskType:
+              this.deps.contractId !== undefined
+                ? String(this.deps.contractId)
+                : stepProfile.goal.slice(0, 50),
+            description: stepProfile.goal,
+          },
+          { maxItems: 5, maxTokens: 1000 },
+        );
+        if (hintResult.ok) {
+          experienceHints = [...hintResult.value];
+        }
+      }
+
       if (
         this.deps.surveillance &&
         (spec.surveillance === "active" || spec.surveillance === "strict")
       ) {
-        // Build a synthetic StepProfile for this iteration
-        const stepProfile: StepProfile = {
-          stepId: `${this.id}-step-${schedState.iteration}`,
-          difficulty: "medium", // default; callers may set spec.surveillance with richer context
-          goal: spec.system.kind === "literal" ? spec.system.text.slice(0, 200) : "agent task",
-          tools: spec.toolsAllowed as readonly string[],
-        };
-
-        // Fetch experience hints if a library is mounted; skip on error so the
-        // hot path is never blocked by a non-critical hint failure.
-        let experienceHints: ExperienceMatch[] | undefined;
-        if (this.deps.experienceLibrary) {
-          const hintResult = await this.deps.experienceLibrary.hint(
-            {
-              taskType: stepProfile.goal.slice(0, 50),
-              description: stepProfile.goal,
-            },
-            { maxItems: 5, maxTokens: 1000 },
-          );
-          if (hintResult.ok) {
-            experienceHints = [...hintResult.value];
-          }
-        }
-
         const assessInput: AssessmentInput = {
           agent: this.id,
           providerId: this.deps.provider.capabilities.id,

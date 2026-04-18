@@ -12,6 +12,7 @@
     { "path": "../../packages/kernel" },
     { "path": "../../packages/providers/mock" },
     { "path": "../../packages/agents" },
-    { "path": "../../packages/replay" }
+    { "path": "../../packages/replay" },
+    { "path": "../../packages/experience-inmemory" }
   ]
 }

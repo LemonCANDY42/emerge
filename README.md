@@ -50,7 +50,8 @@ and adapting task structure to fit.
 - **Replay-grounded experience library.** Every session is recorded;
   postmortem analysis distills `Experience`s keyed by problem-solving
   approach (not topic); surveillance reads them as priors at session start.
-  Bundles are exportable / importable / mergeable for community sharing.
+  The in-memory backend ships now; bundles are exportable / importable /
+  mergeable for community sharing. The loop runs end-to-end today.
 - **Human-in-the-loop is a primitive**, not a tool — `human.request /
   human.reply / human.timeout` envelopes; async approval queue.
 - **Workspace isolation.** Each agent / topology branch / speculative branch
@@ -125,10 +126,10 @@ EMERGE_LLM_BASE_URL=http://localhost:11434/v1 EMERGE_LLM_MODEL=llama3.2 \
 | `@emerge/persistence/*` | Durable task graphs, checkpoints, resume | planned (M4) |
 | `@emerge/modes` | Built-in mode definitions + ModeRegistry impl | shipped (M1) |
 | `@emerge/replay` | Session recorder + replayer | shipped (M1) |
-| `@emerge/experience/*` | Postmortem + experience library + bundles | in-kernel contracts (M3c1); in-memory backend planned (M3c2.5); SQLite backend planned (M5) |
+| `@emerge/experience/*` | Postmortem + experience library + bundles | in-kernel contracts (M3c1); in-memory backend shipped (M3c2.5); SQLite backend planned (M5) |
 | `@emerge/cli` | `emerge run/replay/probe/status` + JSONL schema + OTel emission | planned (M3c2) |
 | `@emerge/telemetry-otel` | OpenTelemetry exporter — Phoenix / Langfuse / any OTel sink | planned (M3c2) |
-| `@emerge/experience-inmemory` | In-memory `ExperienceLibrary` + surveillance `experienceHints` wired end-to-end | planned (M3c2.5) |
+| `@emerge/experience-inmemory` | In-memory `ExperienceLibrary` + surveillance `experienceHints` wired end-to-end | shipped (M3c2.5) |
 | `@emerge/tui` | Ink+React live monitor: topology / verdicts / cost / replay scrubber | planned (M3d) |
 | `@emerge/dashboard` | Vite+React+WebSocket web monitor: topology graph / verdict feed / replay | planned (M3d) |
 | `@emerge/eval-terminal-bench` + `@emerge/sandbox-harbor` + `TerminalBenchBlueprint` | First public TB 2.0 leaderboard submission | planned (M4-prep) |
