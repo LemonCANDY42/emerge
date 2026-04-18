@@ -2,6 +2,10 @@
 
 Instructions for Claude Code (and other agents) working in this repo.
 
+## If you are an AI agent
+
+Start with [AGENTS.md](./AGENTS.md), not this file. AGENTS.md is the entry point for any AI agent landing in this repo. CLAUDE.md is for human developers using Claude Code.
+
 ## What this project is
 
 `emerge` is a TypeScript agent harness. Read [VISION.md](./VISION.md) and

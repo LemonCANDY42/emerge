@@ -71,6 +71,12 @@ assumptions, opaque kernel).
 See [VISION.md](./VISION.md) for the why and [ARCHITECTURE.md](./ARCHITECTURE.md)
 for the how.
 
+## For AI agents
+
+If you are an AI agent landing in this repo, start with [AGENTS.md](./AGENTS.md).
+For agent type-specific harness configurations, see [docs/agents/](./docs/agents/index.md).
+For SDK integration (embedding emerge in your own app), see [docs/usage.md](./docs/usage.md).
+
 ## Try it with a real model
 
 Run the hello-agent task (read README.md, write NOTES.md) against any of the three supported protocols. Each demo exits 0 with a "skipped" message when the env var is absent — safe in CI.
@@ -108,6 +114,7 @@ EMERGE_LLM_BASE_URL=http://localhost:11434/v1 EMERGE_LLM_MODEL=llama3.2 \
 | `@emerge/providers/openai` | OpenAI adapter; chat + responses protocols; custom `baseURL` (D1) | shipped (M3c1) |
 | `@emerge/providers/openai-compat` | Thin wrapper for any OpenAI-compatible service (D2) | shipped (M3c1) |
 | `@emerge/agents` | Topology helpers (supervisor/pool/pipeline); LLM aggregation in supervisorWorker (B) | shipped (M3a, M3c1) |
+| **AI-readable docs** | AGENTS.md, docs/agents/*, docs/usage.md, docs/api.md, docs/install.md | shipped (M3c2a) |
 | `@emerge/artifacts-local-fs` | Local-filesystem artifact store | shipped (M3a) |
 | `@emerge/workspaces-git-worktree` | Git worktree + scoped-tmpdir workspace managers | shipped (M3a) |
 | `@emerge/memory/*` | Episodic + semantic + working + pinned; associative recall | planned (M5) |
