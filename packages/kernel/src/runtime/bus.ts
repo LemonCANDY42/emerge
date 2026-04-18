@@ -162,8 +162,11 @@ export class InMemoryBus implements Bus {
 
     const events = this.makeAsyncIterable(sub);
 
-    return {
+    const subscription: Subscription & { readonly droppedCount: number } = {
       events,
+      get droppedCount(): number {
+        return sub.droppedCount;
+      },
       close: () => {
         sub.closed = true;
         if (sub.resolve) {
@@ -185,6 +188,7 @@ export class InMemoryBus implements Bus {
         this.subs.delete(sub);
       },
     };
+    return subscription;
   }
 
   async request(env: RequestEnvelope): Promise<Result<ResultEnvelope>> {

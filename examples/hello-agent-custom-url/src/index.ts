@@ -54,6 +54,14 @@ async function main() {
     process.exit(0);
   }
 
+  // m8: guard against obviously malformed base URLs before passing them to the HTTP client.
+  if (!/^https?:\/\//.test(baseURL)) {
+    console.error(
+      `[error] EMERGE_LLM_BASE_URL must start with http:// or https://, got: "${baseURL}"`,
+    );
+    process.exit(1);
+  }
+
   console.log("=== hello-agent-custom-url ===\n");
 
   // biome-ignore lint/complexity/useLiteralKeys: env access requires bracket notation
@@ -162,9 +170,9 @@ async function main() {
   const cost = kernel.getCostMeter().ledger();
   console.log(`\nCost ledger: $${cost.totals.grand.toFixed(4)} total`);
 
-  if (recordResult.ok && recordResult.value) {
-    console.log(`\nSession complete: ${String(recordResult.value.sessionId)}`);
-    console.log(`  Events: ${recordResult.value.events.length}`);
+  if (recordResult.ok && recordResult.value.record) {
+    console.log(`\nSession complete: ${String(recordResult.value.record.sessionId)}`);
+    console.log(`  Events: ${recordResult.value.record.events.length}`);
   }
 
   // Assert NOTES.md was written

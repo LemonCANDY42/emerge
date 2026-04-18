@@ -125,8 +125,9 @@ function tightenWorkerAcl(
 }
 
 /**
- * Subscribe to all workers' broadcasts from the supervisor's perspective,
- * forwarding delta + progress envelopes upward as supervisor progress envelopes.
+ * Subscribe to a worker's delta/progress broadcasts and re-emit them as supervisor
+ * progress envelopes (relay). Subscribes under a synthetic orchestrator id so the
+ * subscriber identity does not collide with the supervisor agent's own subscriptions.
  */
 function watchWorkerBroadcasts(
   bus: Bus,
@@ -135,7 +136,9 @@ function watchWorkerBroadcasts(
   sessionId: SessionId,
   corrId: CorrelationId,
 ): () => void {
-  const sub = bus.subscribe(supervisorId, {
+  // C3: synthetic orchestrator id keeps relay subscriptions separate from the supervisor's own.
+  const orchestratorId = `${supervisorId}-orchestrator` as AgentId;
+  const sub = bus.subscribe(orchestratorId, {
     kind: "from",
     sender: workerId,
     kinds: ["delta", "progress"],
@@ -268,8 +271,11 @@ export function supervisorWorker(config: SupervisorWorkerConfig): SupervisorWork
         supervisorCorrId,
       );
 
-      // Subscribe to the worker's result and signal:terminate before running
-      const resultSub = bus.subscribe(supHandle.id, {
+      // C3: subscribe as the topology orchestrator (synthetic id), not the supervisor agent,
+      // to avoid "supervisor subscribes to its own results" confusion.
+      // The "from" matcher filters by sender (the worker), not the subscriber id.
+      const orchestratorId = `${supHandle.id}-orchestrator` as AgentId;
+      const resultSub = bus.subscribe(orchestratorId, {
         kind: "from",
         sender: handle.id,
         kinds: ["result", "signal"],
@@ -392,8 +398,11 @@ export function supervisorWorker(config: SupervisorWorkerConfig): SupervisorWork
     const aggCorrId =
       `sv-agg-${Date.now()}-${Math.random().toString(36).slice(2)}` as CorrelationId;
 
-    // Subscribe to the supervisor's result before sending the request
-    const supResultSub = bus.subscribe(supHandle.id, {
+    // C3: subscribe as the topology orchestrator (synthetic id) to the supervisor's result
+    // broadcast. Using a distinct subscriber id makes it clear this is the orchestrator
+    // waiting for the supervisor's output — not the supervisor waiting for itself.
+    const orchestratorId = `${supHandle.id}-orchestrator` as AgentId;
+    const supResultSub = bus.subscribe(orchestratorId, {
       kind: "from",
       sender: supHandle.id,
       kinds: ["result"],

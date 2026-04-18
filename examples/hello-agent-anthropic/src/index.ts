@@ -140,9 +140,9 @@ async function main() {
   const cost = kernel.getCostMeter().ledger();
   console.log(`\nCost ledger: $${cost.totals.grand.toFixed(4)} total`);
 
-  if (recordResult.ok && recordResult.value) {
-    console.log(`\nSession complete: ${String(recordResult.value.sessionId)}`);
-    console.log(`  Events: ${recordResult.value.events.length}`);
+  if (recordResult.ok && recordResult.value.record) {
+    console.log(`\nSession complete: ${String(recordResult.value.record.sessionId)}`);
+    console.log(`  Events: ${recordResult.value.record.events.length}`);
   }
 
   // Assert NOTES.md was written

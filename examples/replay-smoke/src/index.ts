@@ -106,10 +106,10 @@ async function main() {
   await spawnAndRun(kernel1, "replay-agent" as AgentId);
 
   const endResult1 = await kernel1.endSession();
-  if (!endResult1.ok || !endResult1.value) {
+  if (!endResult1.ok || !endResult1.value.record) {
     throw new Error("Failed to end first session");
   }
-  const record1 = endResult1.value;
+  const record1 = endResult1.value.record;
   console.log(`  Recorded ${record1.events.length} events.`);
   console.log(`  Provider1 call index after phase 1: ${provider1.callIndex}`);
 

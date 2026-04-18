@@ -75,6 +75,10 @@ for the how.
 
 Run the hello-agent task (read README.md, write NOTES.md) against any of the three supported protocols. Each demo exits 0 with a "skipped" message when the env var is absent — safe in CI.
 
+```bash
+pnpm install && pnpm build
+```
+
 **Anthropic (Claude):**
 ```bash
 ANTHROPIC_API_KEY=sk-ant-... node examples/hello-agent-anthropic/dist/index.js

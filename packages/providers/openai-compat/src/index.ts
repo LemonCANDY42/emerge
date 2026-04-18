@@ -75,19 +75,23 @@ export class OpenAICompatProvider implements Provider {
   private readonly inner: OpenAIProvider;
 
   constructor(config: OpenAICompatConfig) {
+    // Merge conservative defaults with any caller-supplied overrides before passing to inner.
+    const claimed: ClaimedCapabilities = {
+      ...DEFAULT_CONSERVATIVE_CAPABILITIES,
+      ...config.capabilities,
+    };
+
+    // C4: pass cost overrides into the inner OpenAIProvider so the USD calculation uses
+    // the caller-supplied rates rather than defaults (which would be zero for custom URLs).
     this.inner = new OpenAIProvider({
       apiKey: config.apiKey ?? "no-key",
       model: config.model,
       baseURL: config.baseURL,
       protocol: config.protocol ?? "chat",
       ...(config.extraHeaders !== undefined ? { extraHeaders: config.extraHeaders } : {}),
+      ...(claimed.costPerMtokIn !== undefined ? { costPerMtokIn: claimed.costPerMtokIn } : {}),
+      ...(claimed.costPerMtokOut !== undefined ? { costPerMtokOut: claimed.costPerMtokOut } : {}),
     });
-
-    // Merge conservative defaults with any caller-supplied overrides
-    const claimed: ClaimedCapabilities = {
-      ...DEFAULT_CONSERVATIVE_CAPABILITIES,
-      ...config.capabilities,
-    };
 
     this.capabilities = {
       id: config.name,

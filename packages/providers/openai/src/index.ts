@@ -43,6 +43,16 @@ export interface OpenAIProviderConfig {
    * routing headers or auth proxies.
    */
   readonly extraHeaders?: Record<string, string>;
+  /**
+   * C4: Override the cost-per-million-input-tokens used in USD calculation.
+   * When set, overrides the default capability value so the cost meter ledger
+   * reflects the actual cost of the served model rather than the default GPT-4o rate.
+   */
+  readonly costPerMtokIn?: number;
+  /**
+   * C4: Override the cost-per-million-output-tokens used in USD calculation.
+   */
+  readonly costPerMtokOut?: number;
 }
 
 // Default GPT-5-class capabilities when model/baseURL not further specified
@@ -193,8 +203,15 @@ export class OpenAIProvider implements Provider {
     });
 
     // Use conservative claims when a custom baseURL is specified
-    const claimed =
+    const baseClaimed =
       config.baseURL !== undefined ? CUSTOM_URL_CLAIMED_CAPABILITIES : DEFAULT_CLAIMED_CAPABILITIES;
+
+    // C4: apply caller-supplied cost overrides so cost ledger reflects actual model pricing.
+    const claimed = {
+      ...baseClaimed,
+      ...(config.costPerMtokIn !== undefined ? { costPerMtokIn: config.costPerMtokIn } : {}),
+      ...(config.costPerMtokOut !== undefined ? { costPerMtokOut: config.costPerMtokOut } : {}),
+    };
 
     this.capabilities = {
       id: `openai-${this.model}`,
@@ -412,8 +429,9 @@ export class OpenAIProvider implements Provider {
       const stream = await responsesApi.create(params);
 
       let finishReason: string | null = null;
-      let currentToolCallId: string | undefined;
-      let currentToolName: string | undefined;
+      // M5: use a Map keyed by item id to handle concurrent tool calls correctly
+      // (instead of a single currentToolCallId cursor that breaks on overlapping calls).
+      const activeToolCallIds = new Map<string, string>(); // item_id → call_id
 
       for await (const event of stream) {
         if (req.signal?.aborted) return;
@@ -434,22 +452,34 @@ export class OpenAIProvider implements Provider {
             const callId = item["call_id"] as string;
             // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature requires bracket notation
             const name = item["name"] as string;
-            currentToolCallId = callId;
-            currentToolName = name;
+            // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature requires bracket notation
+            const itemId = (item["id"] as string | undefined) ?? callId;
+            activeToolCallIds.set(itemId, callId);
             callIdToName.set(callId, name);
             yield { type: "tool_call_start", toolCallId: callId, name };
           }
         } else if (evType === "response.function_call_arguments.delta") {
           // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature requires bracket notation
           const delta = event["delta"] as string | undefined;
-          if (delta && currentToolCallId) {
-            yield { type: "tool_call_input_delta", toolCallId: currentToolCallId, partial: delta };
+          // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature requires bracket notation
+          const itemId = event["item_id"] as string | undefined;
+          // M5: resolve the callId via item_id; fall back to the most recent active call.
+          const callId =
+            (itemId !== undefined ? activeToolCallIds.get(itemId) : undefined) ??
+            [...activeToolCallIds.values()].at(-1);
+          if (delta && callId) {
+            yield { type: "tool_call_input_delta", toolCallId: callId, partial: delta };
           }
         } else if (evType === "response.function_call_arguments.done") {
-          if (currentToolCallId) {
-            yield { type: "tool_call_end", toolCallId: currentToolCallId };
-            currentToolCallId = undefined;
-            currentToolName = undefined;
+          // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature requires bracket notation
+          const itemId = event["item_id"] as string | undefined;
+          const callId =
+            (itemId !== undefined ? activeToolCallIds.get(itemId) : undefined) ??
+            [...activeToolCallIds.values()].at(-1);
+          if (callId) {
+            yield { type: "tool_call_end", toolCallId: callId };
+            // Remove from active map so subsequent calls don't accidentally resolve to it
+            if (itemId !== undefined) activeToolCallIds.delete(itemId);
           }
         } else if (evType === "response.completed") {
           // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature requires bracket notation
@@ -464,6 +494,26 @@ export class OpenAIProvider implements Provider {
             // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature requires bracket notation
             outputTokens = usage["output_tokens"] ?? 0;
           }
+        } else if (evType === "response.error" || evType === "error") {
+          // M5: surface API-level error events as provider error events so the agent
+          // runner can handle them rather than silently swallowing them.
+          // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature requires bracket notation
+          const errObj = (event["error"] ?? event) as Record<string, unknown> | undefined;
+          const message =
+            // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature requires bracket notation
+            (errObj?.["message"] as string | undefined) ??
+            // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature requires bracket notation
+            (errObj?.["code"] as string | undefined) ??
+            "Responses API error";
+          yield {
+            type: "error",
+            error: {
+              code: "E_PROVIDER",
+              message,
+              retriable: false,
+            },
+          };
+          return;
         }
       }
 
@@ -480,9 +530,6 @@ export class OpenAIProvider implements Provider {
             : callIdToName.size > 0
               ? "tool_use"
               : "end_turn";
-
-      // Suppress unused variable warning
-      void currentToolName;
 
       yield {
         type: "stop",

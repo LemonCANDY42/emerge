@@ -35,7 +35,7 @@ async function main() {
 
   if (!apiKey) {
     console.log(
-      "[skipped: OPENAI_API_KEY not set] — run with:\n  OPENAI_API_KEY=sk-... node examples/hello-agent-openai/dist/index.js",
+      "[skipped: OPENAI_API_KEY not set] — run with:\n  OPENAI_API_KEY=sk-... node examples/hello-agent-openai/dist/index.js\n  (model: gpt-4o by default; override with OPENAI_MODEL=<model>)",
     );
     process.exit(0);
   }
@@ -146,9 +146,9 @@ async function main() {
   const cost = kernel.getCostMeter().ledger();
   console.log(`\nCost ledger: $${cost.totals.grand.toFixed(4)} total`);
 
-  if (recordResult.ok && recordResult.value) {
-    console.log(`\nSession complete: ${String(recordResult.value.sessionId)}`);
-    console.log(`  Events: ${recordResult.value.events.length}`);
+  if (recordResult.ok && recordResult.value.record) {
+    console.log(`\nSession complete: ${String(recordResult.value.record.sessionId)}`);
+    console.log(`  Events: ${recordResult.value.record.events.length}`);
   }
 
   // Assert NOTES.md was written

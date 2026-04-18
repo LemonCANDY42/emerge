@@ -359,8 +359,6 @@ export class Kernel {
   }
 
   mountSurveillance(s: Surveillance): void {
-    // surveillance is wired; assess()/observe() are not yet called from the
-    // loop (deferred to M2).
     this.surveillance = s;
   }
 
@@ -620,6 +618,11 @@ export class Kernel {
 
     this.handles.set(spec.id, runner);
 
+    // C1/C2: open inbox + quota subscriptions NOW, before returning the handle.
+    // This ensures any bus.send(request, id) that the caller fires after spawn()
+    // is buffered in the runner's queue and not lost.
+    runner.openInbox();
+
     // C2: register the agent's card in the bus so ACL can be enforced
     if (this.bus instanceof InMemoryBus) {
       this.bus.registerCard(runner.card());
@@ -695,7 +698,12 @@ export class Kernel {
     }
   }
 
-  async endSession(): Promise<Result<SessionRecord | undefined>> {
+  /** M1: Structured result for endSession — carries the session record plus any
+   *  non-fatal postmortem errors so callers can observe them rather than relying
+   *  on console.warn alone. */
+  async endSession(): Promise<
+    Result<{ record: SessionRecord | undefined; postmortemErrors?: ContractError[] }>
+  > {
     // C1: Enforce adjudicator verdict gate unless trustMode is "implicit".
     const trustMode = this.config.trustMode ?? "explicit";
     const adjudicatorId = this.config.roles.adjudicator;
@@ -733,38 +741,58 @@ export class Kernel {
       record = recResult.value;
     }
 
+    // M1: Warn once when only one of (Postmortem, ExperienceLibrary) is mounted.
+    // Both are required for auto-invoke to fire; a mismatch is almost certainly
+    // a misconfiguration and should be visible at session-end.
+    if (this.postmortem !== undefined && this.experienceLibrary === undefined) {
+      console.warn(
+        "[emerge/kernel] endSession: Postmortem mounted without ExperienceLibrary; auto-invoke disabled. Mount an ExperienceLibrary to enable postmortem→ingest wiring (ADR 0019).",
+      );
+    } else if (this.postmortem === undefined && this.experienceLibrary !== undefined) {
+      console.warn(
+        "[emerge/kernel] endSession: ExperienceLibrary mounted without Postmortem; auto-invoke disabled. Mount a Postmortem to enable postmortem→ingest wiring (ADR 0019).",
+      );
+    }
+
     // C: ADR 0019 — auto-invoke Postmortem + ExperienceLibrary ingest after session ends.
-    // Errors are non-fatal: returned as postmortemErrors so callers can observe but the
-    // session record is still committed.
+    // Errors are non-fatal: returned as postmortemErrors so callers can observe them;
+    // the session record is still committed regardless.
+    const postmortemErrors: ContractError[] = [];
+
     if (
       this.postmortem !== undefined &&
       this.experienceLibrary !== undefined &&
       record !== undefined
     ) {
-      const postmortemErrors: string[] = [];
       const pm = this.postmortem;
       const lib = this.experienceLibrary;
 
       const analyzeResult = await pm.analyze(record);
       if (!analyzeResult.ok) {
-        postmortemErrors.push(`postmortem.analyze: ${analyzeResult.error.message}`);
+        postmortemErrors.push({
+          code: "E_POSTMORTEM_ANALYZE",
+          message: `postmortem.analyze: ${analyzeResult.error.message}`,
+        });
       } else {
         for (const exp of analyzeResult.value) {
           const ingestResult = await lib.ingest(exp);
           if (!ingestResult.ok) {
-            postmortemErrors.push(`library.ingest(${exp.id}): ${ingestResult.error.message}`);
+            postmortemErrors.push({
+              code: "E_POSTMORTEM_INGEST",
+              message: `library.ingest(${exp.id}): ${ingestResult.error.message}`,
+            });
           }
         }
       }
-
-      if (postmortemErrors.length > 0) {
-        console.warn(
-          `[emerge/kernel] endSession: postmortem errors (non-fatal): ${postmortemErrors.join("; ")}`,
-        );
-      }
     }
 
-    return { ok: true, value: record };
+    return {
+      ok: true,
+      value: {
+        record,
+        ...(postmortemErrors.length > 0 ? { postmortemErrors } : {}),
+      },
+    };
   }
 
   getBus(): Bus {

@@ -20,7 +20,12 @@
  */
 
 import { createHash } from "node:crypto";
-import { buildAdjudicator, buildCustodian, supervisorWorker } from "@emerge/agents";
+import {
+  acceptanceCriteriaFromContract,
+  buildAdjudicator,
+  buildCustodian,
+  supervisorWorker,
+} from "@emerge/agents";
 import type { KernelLike } from "@emerge/agents";
 import type {
   AgentId,
@@ -596,6 +601,9 @@ async function main() {
     makeWorkerSpec(workerCId, "mock-worker-c", INPUT_C),
   ];
 
+  // M3: No reducer — uses LLM aggregation path (supervisor agent's response becomes output).
+  // The supervisor MockProvider script returns a combined narrative that includes all three
+  // worker outputs verbatim, simulating what a real LLM supervisor would produce.
   const topologyResult = supervisorWorker({
     supervisor: supervisorSpec,
     workers,
@@ -607,20 +615,8 @@ async function main() {
         id: `piece-${i}`,
         payload: piece,
       })),
-    reducer: (results) => {
-      const parts = results
-        .map((r) => {
-          if (r && typeof r === "object" && "text" in r)
-            return String((r as { text: unknown }).text);
-          if (typeof r === "string") return r;
-          return JSON.stringify(r);
-        })
-        .filter(Boolean);
-      return {
-        text: `Combined narrative: ${parts.join(" ")}`,
-        parts,
-      };
-    },
+    // acceptanceCriteria wired from contract (M4)
+    acceptanceCriteria: acceptanceCriteriaFromContract(contract),
   });
 
   // C6: unwrap the Result
@@ -734,7 +730,10 @@ async function main() {
     process.exit(1);
   }
 
-  const record = endResult.value;
+  const record = endResult.value.record;
+  if (endResult.value.postmortemErrors && endResult.value.postmortemErrors.length > 0) {
+    console.warn("[postmortem] Non-fatal errors:", endResult.value.postmortemErrors);
+  }
 
   // ─── Session Summary ──────────────────────────────────────────────────
   console.log("\n══════════════════════════════════════════");
@@ -772,6 +771,33 @@ async function main() {
   const hasQuotaFlow = ledger.entries.length >= 1;
   const hasAlignedVerdict = verdict.kind === "aligned";
 
+  // M3: Assert LLM aggregation path — output must contain all 3 worker substrings.
+  // (With no reducer:, the supervisor agent's LLM response is the topology output.)
+  const aggregateText =
+    aggregate && typeof aggregate === "object" && "text" in aggregate
+      ? String((aggregate as { text: unknown }).text)
+      : typeof aggregate === "string"
+        ? aggregate
+        : JSON.stringify(aggregate);
+
+  // The key tokens that each worker's output contained (lowercase for matching)
+  const workerTokens = ["carthage", "punic", "hannibal"];
+  const missingWorkerTokens = workerTokens.filter(
+    (token) => !aggregateText.toLowerCase().includes(token),
+  );
+  const hasAllWorkerOutputs = missingWorkerTokens.length === 0;
+
+  console.log(
+    `LLM aggregation: ${hasAllWorkerOutputs ? "OK (all 3 worker outputs present)" : `MISSING: ${missingWorkerTokens.join(", ")}`}`,
+  );
+
+  if (!hasAllWorkerOutputs) {
+    console.error(
+      `\nASSERTION FAILED: LLM aggregation output missing worker substrings: ${missingWorkerTokens.join(", ")}. Output: "${aggregateText.slice(0, 200)}"`,
+    );
+    process.exit(1);
+  }
+
   if (!hasQuotaFlow) {
     console.error("\nASSERTION FAILED: No quota.request → quota.partial pair");
     process.exit(1);
@@ -788,16 +814,30 @@ async function main() {
   }
 
   // H: (M3c1) Assert the Experience landed in the library after endSession() auto-invoked
-  // postmortem.analyze() → library.ingest() (ADR 0019)
+  // postmortem.analyze() → library.ingest() (ADR 0019).
+  // M2: assert the experience's provenance.sourceSessions includes the actual session id
+  // so a wiring bug that passes an empty or wrong record would be detected.
   const experienceList = experienceLibrary.list();
   const hasExperience = experienceList.length > 0;
+  const experienceTracesSession =
+    hasExperience && experienceList[0]?.provenance?.sourceSessions?.includes(sessionId) === true;
+
   console.log(
     `\n[postmortem] Experiences in library: ${experienceList.length} (taskType: ${experienceList[0]?.taskType ?? "n/a"})`,
+  );
+  console.log(
+    `[postmortem] Experience traces session ${String(sessionId)}: ${experienceTracesSession ? "YES" : "NO"}`,
   );
 
   if (!hasExperience) {
     console.error(
       "\nASSERTION FAILED: Postmortem did not produce an Experience in the library (ADR 0019)",
+    );
+    process.exit(1);
+  }
+  if (!experienceTracesSession) {
+    console.error(
+      `\nASSERTION FAILED: Experience.provenance.sourceSessions does not include session id '${String(sessionId)}' — wiring bug (ADR 0019)`,
     );
     process.exit(1);
   }

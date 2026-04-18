@@ -186,8 +186,8 @@ async function main() {
 
   // End session and get record
   const recordResult = await kernel.endSession();
-  if (recordResult.ok && recordResult.value) {
-    const record = recordResult.value;
+  if (recordResult.ok && recordResult.value.record) {
+    const record = recordResult.value.record;
     console.log(`\nSession complete: ${String(record.sessionId)}`);
     console.log(`  Events recorded: ${record.events.length}`);
     console.log(`  Started: ${new Date(record.startedAt).toISOString()}`);

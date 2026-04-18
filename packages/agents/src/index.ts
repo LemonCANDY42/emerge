@@ -5,6 +5,7 @@
  *   - supervisorWorker, workerPool, pipeline (topology helpers)
  *   - buildCustodian, buildAdjudicator, buildPostmortem (role helpers)
  *   - BlueprintRegistry, assembleAgent, genericWorkerBlueprint
+ *   - acceptanceCriteriaFromContract (M4: helper to extract criterion text for supervisor prompt)
  */
 
 export { supervisorWorker } from "./topologies/supervisor-worker.js";
@@ -15,6 +16,28 @@ export type {
   SupervisorWorkerResult,
   KernelLike,
 } from "./topologies/supervisor-worker.js";
+
+/**
+ * M4: Joins a Contract's acceptance criteria descriptions into a single string
+ * suitable for inclusion in a supervisor aggregation prompt.
+ *
+ * Usage:
+ *   supervisorWorker({
+ *     ...
+ *     acceptanceCriteria: acceptanceCriteriaFromContract(contract),
+ *   })
+ */
+export function acceptanceCriteriaFromContract(
+  contract: import("@emerge/kernel/contracts").Contract,
+): string {
+  return contract.acceptanceCriteria
+    .filter(
+      (c): c is { kind: "predicate" | "human-checkpoint"; description: string } =>
+        "description" in c,
+    )
+    .map((c) => c.description)
+    .join("; ");
+}
 
 export { workerPool } from "./topologies/worker-pool.js";
 export type {
