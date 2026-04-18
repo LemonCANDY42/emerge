@@ -53,6 +53,21 @@ The dashboard server:
 3. Streams events via WebSocket to connected browsers
 4. Exposes `/api/health` (JSON) and `/api/session.jsonl` (raw JSONL download)
 
+## Security
+
+The dashboard has **no authentication**. It is designed for local development only.
+
+| Property | Value |
+|---|---|
+| Default bind | `127.0.0.1` (loopback only) |
+| `--listen 0.0.0.0` | Unsafe outside trusted networks — prints a warning |
+| WebSocket Origin | Allowlist enforced; defaults to `http://127.0.0.1:<port>` and `http://localhost:<port>` |
+| Auth | None |
+
+A WebSocket connection whose `Origin` header is not in the allowlist is rejected with close code 1008. This prevents arbitrary browser tabs from reading the event stream (which may contain user prompts or provider call payloads).
+
+For detailed information including the `allowOrigins` API option, see [packages/dashboard/README.md](../../packages/dashboard/README.md).
+
 ## EMERGE_DASHBOARD=1 integration
 
 The `topology-supervisor-worker` demo supports an opt-in dashboard mode:

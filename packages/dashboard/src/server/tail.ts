@@ -78,6 +78,13 @@ export function tailFile(
         return;
       }
 
+      if (stats.size < offset) {
+        // File was truncated (e.g. log rotation or in-place replace).
+        // Reset to the beginning so we don't miss events.
+        offset = 0;
+        partial = "";
+      }
+
       if (stats.size <= offset) return;
 
       const stream = createReadStream(filePath, {

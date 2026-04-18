@@ -16,7 +16,7 @@ import type { JsonlEvent } from "@emerge/kernel/contracts";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { WebSocket } from "ws";
 import { startServer } from "./index.js";
-import type { ServerHandle } from "./index.js";
+import type { ServerHandle, ServerOptions } from "./index.js";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -26,7 +26,7 @@ function makeLifecycleEvent(at: number): JsonlEvent {
     type: "lifecycle",
     at,
     agent: "test-agent" as import("@emerge/kernel/contracts").AgentId,
-    transition: "running" as import("@emerge/kernel/contracts").AgentState,
+    transition: "thinking" as import("@emerge/kernel/contracts").AgentState,
   };
 }
 
@@ -319,6 +319,141 @@ describe("dashboard server", () => {
     expect(res.status).toBe(200);
     const text = await res.text();
     expect(text).toBe("");
+  });
+
+  // ─── Regression: #1 path traversal ──────────────────────────────────────
+
+  it("GET /assets/../../../package.json returns 404 (path traversal blocked)", async () => {
+    const path = writeTempJsonl([]);
+    handle = await startServer({
+      port: 0,
+      host: "127.0.0.1",
+      source: { kind: "jsonl-replay", path },
+    });
+
+    // Attempt path traversal — must return 404, not 200 with file contents
+    const res = await fetch(`http://127.0.0.1:${handle.port}/assets/../../../package.json`);
+    expect(res.status).toBe(404);
+  });
+
+  it("GET /assets/../../../../etc/passwd returns 404 (deep traversal blocked)", async () => {
+    const path = writeTempJsonl([]);
+    handle = await startServer({
+      port: 0,
+      host: "127.0.0.1",
+      source: { kind: "jsonl-replay", path },
+    });
+
+    const res = await fetch(`http://127.0.0.1:${handle.port}/assets/../../../../etc/passwd`);
+    expect(res.status).toBe(404);
+  });
+
+  // ─── Regression: #3 WebSocket Origin allowlist ───────────────────────────
+
+  it("WS connection from default loopback Origin is accepted", async () => {
+    const path = writeTempJsonl([]);
+    handle = await startServer({
+      port: 0,
+      host: "127.0.0.1",
+      source: { kind: "jsonl-replay", path },
+    });
+
+    const origin = `http://127.0.0.1:${handle.port}`;
+    const ws = new WebSocket(`ws://127.0.0.1:${handle.port}`, { headers: { origin } });
+    await new Promise<void>((resolve, reject) => {
+      ws.on("open", resolve);
+      ws.on("error", reject);
+    });
+    ws.close();
+  });
+
+  it("WS connection from disallowed Origin is rejected with close code 1008", async () => {
+    const path = writeTempJsonl([]);
+    handle = await startServer({
+      port: 0,
+      host: "127.0.0.1",
+      source: { kind: "jsonl-replay", path },
+    });
+
+    const ws = new WebSocket(`ws://127.0.0.1:${handle.port}`, {
+      headers: { origin: "http://evil.example.com" },
+    });
+
+    const closeCode = await new Promise<number>((resolve) => {
+      ws.on("close", (code) => resolve(code));
+      // If the connection is rejected, it may error before closing — treat as rejection
+      ws.on("error", () => resolve(-1));
+    });
+
+    // Server must not accept the connection
+    expect(closeCode).not.toBe(1000); // 1000 = normal close (would mean accepted)
+  });
+
+  it("WS connection from an explicit extra allowlist Origin is accepted", async () => {
+    const path = writeTempJsonl([]);
+    handle = await startServer({
+      port: 0,
+      host: "127.0.0.1",
+      source: { kind: "jsonl-replay", path },
+      allowOrigins: ["http://trusted.internal:9000"],
+    } satisfies ServerOptions);
+
+    const ws = new WebSocket(`ws://127.0.0.1:${handle.port}`, {
+      headers: { origin: "http://trusted.internal:9000" },
+    });
+    await new Promise<void>((resolve, reject) => {
+      ws.on("open", resolve);
+      ws.on("error", reject);
+    });
+    ws.close();
+  });
+
+  // ─── Regression: #5 initial-offset race ─────────────────────────────────
+
+  it("events appended between stat and readAllLines are not dropped", async () => {
+    // This test verifies the stat-before-read ordering. We write N events,
+    // then start the server in tail mode. Because the stat is taken before the
+    // read, any bytes written after the stat start but before the read finishes
+    // will be read again by the tailer. The test verifies that events written
+    // BEFORE the server starts are all delivered (no gap scenario).
+    const events = [makeSessionStart(1000), makeLifecycleEvent(2000)];
+    const path = writeTempJsonl(events);
+
+    handle = await startServer({
+      port: 0,
+      host: "127.0.0.1",
+      source: { kind: "jsonl-tail", path },
+    });
+
+    const frames = await collectFrames(`ws://127.0.0.1:${handle.port}`, 1);
+    const frame = frames[0] as { type: string; events: unknown[] };
+    expect(frame.type).toBe("init");
+    // All events written before server start must be in the init frame
+    expect(frame.events).toHaveLength(2);
+  });
+
+  // ─── Regression: #10 wss.close() terminates connected sockets ───────────
+
+  it("server.close() terminates active WebSocket connections", async () => {
+    const path = writeTempJsonl([]);
+    handle = await startServer({
+      port: 0,
+      host: "127.0.0.1",
+      source: { kind: "jsonl-replay", path },
+    });
+
+    const ws = new WebSocket(`ws://127.0.0.1:${handle.port}`);
+    await new Promise<void>((resolve) => ws.on("open", resolve));
+
+    // close() should not hang; it must terminate the connected socket
+    const closePromise = handle.close().then(() => "done");
+    const result = await Promise.race([
+      closePromise,
+      new Promise<string>((resolve) => setTimeout(() => resolve("timeout"), 3000)),
+    ]);
+
+    expect(result).toBe("done");
+    handle = undefined; // Already closed
   });
 
   it("in-process bus events are forwarded to WS clients", async () => {

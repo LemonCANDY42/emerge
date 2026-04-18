@@ -14,6 +14,8 @@
  *
  * Replay mode is detected when the URL contains ?mode=replay.
  * The scrubber tracks a cursor into the event log client-side.
+ * In replay mode, rawEvents are accumulated so the scrubber can reconstruct
+ * intermediate states: displayState = applyEvents(rawEvents.slice(0, cursor)).
  */
 
 import { applyEvents } from "@emerge/tui/state";
@@ -64,26 +66,22 @@ function StatusPill({ status }: { status: ConnectionStatus }): React.ReactElemen
 }
 
 export function App(): React.ReactElement {
-  const stream = useEventStream();
-  const { tuiState, connectionStatus, eventCount } = stream;
+  const stream = useEventStream({ accumulateRaw: isReplayMode });
+  const { tuiState, connectionStatus, eventCount, rawEvents } = stream;
 
   // Replay cursor — only used in replay mode
   const [cursor, setCursor] = useState<number>(0);
   const [playing, setPlaying] = useState(false);
   const [speed, setSpeed] = useState<1 | 2 | 4>(1);
 
-  // In replay mode, reconstruct state up to cursor
-  // In live mode, use the full tuiState from the stream
-  const allEvents = useMemo(() => {
-    // We need to access the raw events. In replay mode the tuiState is built
-    // from all events; for cursor-based replay we need the raw list.
-    // This is a limitation of the current approach: the reducer accumulates state
-    // but doesn't expose the raw event log. We track events separately for replay.
-    return [] as readonly import("@emerge/kernel/contracts").JsonlEvent[];
-  }, []);
-
-  const displayState =
-    isReplayMode && allEvents.length > 0 ? applyEvents(allEvents.slice(0, cursor)) : tuiState;
+  // In replay mode, reconstruct state up to cursor from the raw event log.
+  // In live mode, use the full tuiState from the stream.
+  const displayState = useMemo(() => {
+    if (isReplayMode && rawEvents.length > 0) {
+      return applyEvents(rawEvents.slice(0, cursor));
+    }
+    return tuiState;
+  }, [tuiState, rawEvents, cursor]);
 
   return (
     <div className="flex flex-col min-h-screen bg-gray-950 text-gray-100 font-mono">

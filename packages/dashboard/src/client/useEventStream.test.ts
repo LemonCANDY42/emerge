@@ -64,7 +64,7 @@ function makeLifecycle(at: number): JsonlEvent {
     type: "lifecycle",
     at,
     agent: "agent-a" as import("@emerge/kernel/contracts").AgentId,
-    transition: "running" as import("@emerge/kernel/contracts").AgentState,
+    transition: "thinking" as import("@emerge/kernel/contracts").AgentState,
   };
 }
 
@@ -186,5 +186,98 @@ describe("useEventStream", () => {
 
     // Event count should remain 0; no crash
     expect(result.current.eventCount).toBe(0);
+  });
+
+  // ─── Regression: #2 replay scrubber rawEvents accumulation ──────────────
+
+  it("rawEvents is empty when accumulateRaw is false (live mode default)", async () => {
+    const { useEventStream } = await import("./useEventStream.js");
+    const { result } = renderHook(() => useEventStream("ws://localhost:7777"));
+
+    const events: JsonlEvent[] = [makeSessionStart(1000), makeLifecycle(2000)];
+
+    await act(async () => {
+      await new Promise<void>((r) => setTimeout(r, 20));
+      const ws = stubInstances[0] as unknown as StubWebSocket;
+      ws.push({ type: "init", events });
+    });
+
+    // rawEvents must NOT be populated in live mode
+    expect(result.current.rawEvents).toHaveLength(0);
+    expect(result.current.eventCount).toBe(2);
+  });
+
+  it("rawEvents is populated when accumulateRaw is true (replay mode)", async () => {
+    const { useEventStream } = await import("./useEventStream.js");
+    const { result } = renderHook(() =>
+      useEventStream({ wsUrl: "ws://localhost:7777", accumulateRaw: true }),
+    );
+
+    const events: JsonlEvent[] = [makeSessionStart(1000), makeLifecycle(2000)];
+
+    await act(async () => {
+      await new Promise<void>((r) => setTimeout(r, 20));
+      const ws = stubInstances[0] as unknown as StubWebSocket;
+      ws.push({ type: "init", events });
+    });
+
+    expect(result.current.rawEvents).toHaveLength(2);
+    expect(result.current.rawEvents[0]?.type).toBe("session.start");
+    expect(result.current.rawEvents[1]?.type).toBe("lifecycle");
+  });
+
+  it("subsequent EVENT frames accumulate in rawEvents when accumulateRaw is true", async () => {
+    const { useEventStream } = await import("./useEventStream.js");
+    const { result } = renderHook(() =>
+      useEventStream({ wsUrl: "ws://localhost:7777", accumulateRaw: true }),
+    );
+
+    await act(async () => {
+      await new Promise<void>((r) => setTimeout(r, 20));
+      const ws = stubInstances[0] as unknown as StubWebSocket;
+      ws.push({ type: "init", events: [makeSessionStart(1000)] });
+    });
+
+    await act(async () => {
+      const ws = stubInstances[0] as unknown as StubWebSocket;
+      ws.push({ type: "event", event: makeLifecycle(2000) });
+    });
+
+    // Both the init event and the subsequent event must be in rawEvents
+    expect(result.current.rawEvents).toHaveLength(2);
+    expect(result.current.rawEvents[1]?.type).toBe("lifecycle");
+  });
+
+  it("moving cursor changes which events are reflected in panels (replay scrubber)", async () => {
+    // This is the core replay scrubber regression: slicing rawEvents at cursor
+    // and calling applyEvents must produce different states at different cursor positions.
+    const { applyEvents } = await import("@emerge/tui/state");
+    const { useEventStream } = await import("./useEventStream.js");
+    const { result } = renderHook(() =>
+      useEventStream({ wsUrl: "ws://localhost:7777", accumulateRaw: true }),
+    );
+
+    const events: JsonlEvent[] = [
+      makeSessionStart(1000),
+      makeLifecycle(2000), // adds agent-a
+    ];
+
+    await act(async () => {
+      await new Promise<void>((r) => setTimeout(r, 20));
+      const ws = stubInstances[0] as unknown as StubWebSocket;
+      ws.push({ type: "init", events });
+    });
+
+    const { rawEvents } = result.current;
+    expect(rawEvents).toHaveLength(2);
+
+    // Cursor at 0 — no events applied
+    const stateAt0 = applyEvents(rawEvents.slice(0, 0));
+    expect(stateAt0.agents.size).toBe(0);
+
+    // Cursor at 2 — all events applied, agent-a visible
+    const stateAt2 = applyEvents(rawEvents.slice(0, 2));
+    expect(stateAt2.agents.size).toBe(1);
+    expect(stateAt2.agents.has("agent-a" as import("@emerge/kernel/contracts").AgentId)).toBe(true);
   });
 });

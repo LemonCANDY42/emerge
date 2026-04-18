@@ -138,7 +138,7 @@ export function VerdictExplorer({ state }: VerdictExplorerProps): React.ReactEle
         <h2 className="text-xs font-bold text-purple-400 uppercase tracking-wider">
           Verdict Explorer
         </h2>
-        <span className="text-purple-600 text-xs">\u2014 contract enforcement</span>
+        <span className="text-purple-600 text-xs">{"\u2014"} contract enforcement</span>
       </div>
 
       {/* Filter buttons */}

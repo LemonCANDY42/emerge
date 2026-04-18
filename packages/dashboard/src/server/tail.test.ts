@@ -16,7 +16,7 @@ function makeLifecycle(at: number): JsonlEvent {
     type: "lifecycle",
     at,
     agent: "agent-a" as import("@emerge/kernel/contracts").AgentId,
-    transition: "running" as import("@emerge/kernel/contracts").AgentState,
+    transition: "thinking" as import("@emerge/kernel/contracts").AgentState,
   };
 }
 
@@ -107,6 +107,30 @@ describe("tailFile", () => {
 
     // No additional events should have been received after stop()
     expect(received.length).toBe(countAfterInit);
+  });
+
+  it("recovers after file truncation (regression #4)", async () => {
+    const { writeFileSync: writeFs } = await import("node:fs");
+
+    const path = writeTempJsonl([makeLifecycle(1000), makeLifecycle(2000)]);
+    const received: JsonlEvent[] = [];
+    const tailer = tailFile(path, (ev) => received.push(ev));
+
+    // Wait for initial read
+    await new Promise<void>((r) => setTimeout(r, 400));
+    const countAfterInit = received.length;
+
+    // Truncate the file and write a fresh event
+    writeFs(path, `${JSON.stringify(makeLifecycle(3000))}\n`, "utf-8");
+
+    // Wait for tailer to recover and pick up the new event
+    await new Promise<void>((r) => setTimeout(r, 600));
+    tailer.stop();
+
+    // The tailer must have recovered — we should see the event written after truncation
+    expect(received.length).toBeGreaterThan(countAfterInit);
+    const timestamps = received.map((e) => e.at);
+    expect(timestamps).toContain(3000);
   });
 
   it("skips bad lines in tail mode", async () => {

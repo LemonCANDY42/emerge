@@ -794,15 +794,22 @@ async function main() {
     tuiProcess.kill("SIGTERM");
   }
 
-  // Clean up dashboard process if spawned
-  if (dashboardProcess !== undefined) {
-    console.log("\n[dashboard] Demo complete. The dashboard server is still running.");
-    console.log("[dashboard] Press Ctrl+C in the dashboard terminal to stop it.");
-    // Don't kill the dashboard — the user wants to keep browsing
-    // Signal it to clean up after a short delay
-    setTimeout(() => {
-      dashboardProcess?.kill("SIGTERM");
-    }, 5000);
+  // Clean up dashboard process if spawned.
+  // Kill synchronously before process.exit so the child does not inherit a
+  // broken stdio pipe. SIGTERM gives it a chance to flush; after 2 s we send
+  // SIGKILL to guarantee the process is gone before the parent exits.
+  if (dashboardProcess !== undefined && !dashboardProcess.killed) {
+    dashboardProcess.kill("SIGTERM");
+    await new Promise<void>((resolve) => {
+      const deadline = setTimeout(() => {
+        dashboardProcess?.kill("SIGKILL");
+        resolve();
+      }, 2000);
+      dashboardProcess?.once("exit", () => {
+        clearTimeout(deadline);
+        resolve();
+      });
+    });
   }
 
   process.exit(0);
