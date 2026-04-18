@@ -41,3 +41,6 @@ export * from "./human.js";
 export * from "./workspace.js";
 export * from "./branch.js";
 export * from "./projection.js";
+
+// M3c2: JSONL event schema — public, versioned contract (ADR 0037)
+export * from "./jsonl-schema.js";

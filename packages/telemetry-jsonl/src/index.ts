@@ -1,10 +1,14 @@
 /**
  * JsonlTelemetry — writes one JSON line per start/end/event to a file.
+ *
+ * Each line conforms to the JSONL event schema (ADR 0037):
+ *   { v: "1.0.0", type: "span.start" | "span.end" | "span.event", at: number, ... }
  */
 
 import fs from "node:fs";
 import path from "node:path";
 import type { SpanEnd, SpanId, SpanStart, Telemetry } from "@emerge/kernel/contracts";
+import { spanEndEvent, spanEventEvent, spanStartEvent } from "@emerge/kernel/contracts";
 
 export class JsonlTelemetry implements Telemetry {
   private readonly filePath: string;
@@ -18,15 +22,15 @@ export class JsonlTelemetry implements Telemetry {
   }
 
   start(span: SpanStart): void {
-    this.write({ type: "start", ...span });
+    this.write(spanStartEvent(span));
   }
 
   end(span: SpanEnd): void {
-    this.write({ type: "end", ...span });
+    this.write(spanEndEvent(span));
   }
 
   event(spanId: SpanId, name: string, attrs?: Readonly<Record<string, unknown>>): void {
-    this.write({ type: "event", spanId, name, attrs, at: Date.now() });
+    this.write(spanEventEvent(spanId, name, attrs));
   }
 
   close(): void {

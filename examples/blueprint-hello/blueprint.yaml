@@ -1,0 +1,18 @@
+schemaVersion: "1.0.0"
+contract:
+  id: "demo-contract"
+  goal: "Read README.md and write a one-line summary to NOTES.md"
+agent:
+  id: "writer"
+  role: "general"
+  provider:
+    kind: "static"
+    providerId: "mock"
+  tools: []
+termination:
+  maxIterations: 10
+  maxWallMs: 30000
+verification:
+  mode: "off"
+  requireVerdictBeforeExit: false
+trustMode: "implicit"

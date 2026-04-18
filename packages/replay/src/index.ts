@@ -1,14 +1,21 @@
 /**
  * @emerge/replay — InMemorySessionRecorder + JsonlReplayer + helpers.
+ *
+ * M3c2 update: makeRecorder() now writes per-event JSONL lines as they arrive
+ * (conforming to the JSONL schema contract, ADR 0037), PLUS a session.start
+ * line when start() is called and a session.end line when end() is called.
+ * The old fat-record write (one JSON blob per session on end()) is removed
+ * in favour of the streaming per-line format. See ADR 0037 for rationale.
  */
 
+import { appendFileSync, mkdirSync } from "node:fs";
+import { dirname } from "node:path";
 import type {
   ContractId,
   Provider,
   ProviderCapabilities,
   ProviderEvent,
   ProviderMessage,
-  ProviderRequest,
   RecordedEvent,
   ReplayCursor,
   Replayer,
@@ -17,6 +24,7 @@ import type {
   SessionRecord,
   SessionRecorder,
 } from "@emerge/kernel/contracts";
+import { fromRecordedEvent, sessionEndEvent, sessionStartEvent } from "@emerge/kernel/contracts";
 
 export class InMemorySessionRecorder implements SessionRecorder {
   private readonly sessions = new Map<
@@ -159,9 +167,24 @@ export class RecordedProvider implements Provider {
   }
 }
 
+// Local type alias to avoid importing ProviderRequest twice
+type ProviderRequest = Parameters<Provider["invoke"]>[0];
+
 /**
  * Creates a recorder + optional file persistence.
- * If filePath is provided, flushes the SessionRecord as JSONL on end().
+ *
+ * If filePath is provided:
+ *   - Writes a "session.start" JSONL line when start() is called.
+ *   - Appends one JSONL line per recorded event (per-event streaming, ADR 0037).
+ *   - Writes a "session.end" JSONL line when end() is called.
+ *
+ * The old fat-record format (one JSON blob per session at end()) is replaced
+ * by the per-line streaming format. Readers that relied on the fat-record must
+ * migrate to line-by-line parsing. See ADR 0037.
+ *
+ * File writes are SYNCHRONOUS so that line order in the file always matches
+ * call order and the `at` timestamp on each event is captured at the call site
+ * (not inside an async callback). See M3c2 review finding #1.
  */
 export function makeRecorder(options?: {
   filePath?: string;
@@ -169,25 +192,39 @@ export function makeRecorder(options?: {
   const inner = new InMemorySessionRecorder();
   let lastRecord: SessionRecord | undefined;
 
+  // Initialise synchronous file appender eagerly if a path is provided.
+  // mkdirSync + appendFileSync keep ordering guaranteed — no microtask queue.
+  let writeLine: ((line: string) => void) | undefined;
+  if (options?.filePath) {
+    const dir = dirname(options.filePath);
+    if (dir) mkdirSync(dir, { recursive: true });
+    const fp = options.filePath;
+    writeLine = (line: string) => appendFileSync(fp, `${line}\n`, "utf-8");
+  }
+
   return {
     start(sessionId, contract) {
+      // Capture timestamp BEFORE handing off to inner (keeps at <= event.at).
+      const at = Date.now();
       inner.start(sessionId, contract);
+      if (writeLine) {
+        writeLine(JSON.stringify(sessionStartEvent(sessionId, contract, at)));
+      }
     },
     record(event) {
       inner.record(event);
+      if (writeLine) {
+        writeLine(JSON.stringify(fromRecordedEvent(event)));
+      }
     },
     async end(sessionId) {
+      const at = Date.now();
       const result = await inner.end(sessionId);
       if (!result.ok) return result;
       lastRecord = result.value;
 
-      if (options?.filePath) {
-        // Lazy import fs to avoid breaking in environments without Node
-        const { appendFileSync, mkdirSync } = await import("node:fs");
-        const { dirname } = await import("node:path");
-        const dir = dirname(options.filePath);
-        if (dir) mkdirSync(dir, { recursive: true });
-        appendFileSync(options.filePath, `${JSON.stringify(result.value)}\n`, "utf-8");
+      if (writeLine) {
+        writeLine(JSON.stringify(sessionEndEvent(sessionId, at)));
       }
 
       return result;
