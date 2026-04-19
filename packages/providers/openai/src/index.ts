@@ -520,9 +520,20 @@ export class OpenAIProvider implements Provider {
     // and enables reverse-translation of incoming function_call names.
     const nameMap = buildToolNameMap(req.tools ?? []);
 
-    // Build input: filter out system (it goes in system_instructions), flatten rest
+    // Build input items for Responses API. The input array accepts a mixed sequence of:
+    //   - { role: "user" | "assistant", content: string }            (regular messages)
+    //   - { type: "function_call", call_id, name, arguments }        (model's prior tool call)
+    //   - { type: "function_call_output", call_id, output }          (tool result feeding back)
+    // Critically: assistant tool_use blocks and user tool_result blocks MUST be emitted as
+    // function_call / function_call_output items, NOT as text messages — otherwise the model
+    // sees only "Use tools" with no context of which it already called or what came back, and
+    // ends the turn with text instead of progressing.
+    type InputItem =
+      | { role: "user" | "assistant"; content: string }
+      | { type: "function_call"; call_id: string; name: string; arguments: string }
+      | { type: "function_call_output"; call_id: string; output: string };
     let systemText: string | undefined;
-    const inputMessages: Array<{ role: "user" | "assistant"; content: string }> = [];
+    const inputMessages: InputItem[] = [];
 
     for (const msg of req.messages) {
       if (msg.role === "system") {
@@ -530,31 +541,57 @@ export class OpenAIProvider implements Provider {
         continue;
       }
       if (msg.role === "tool") {
-        // Tool results: format as user message for Responses API
-        const parts = msg.content
-          .filter((c) => c.type === "tool_result")
-          .map((c) =>
-            c.type === "tool_result"
-              ? `[tool_result:${c.toolCallId}] ${typeof c.output === "string" ? c.output : JSON.stringify(c.output)}`
-              : "",
-          )
-          .join("\n");
-        inputMessages.push({ role: "user", content: parts });
+        // Tool results: emit as function_call_output items per Responses API contract
+        for (const c of msg.content) {
+          if (c.type === "tool_result") {
+            const output = typeof c.output === "string" ? c.output : JSON.stringify(c.output);
+            inputMessages.push({
+              type: "function_call_output",
+              call_id: c.toolCallId,
+              output,
+            });
+          }
+        }
         continue;
       }
       if (msg.role === "user") {
-        const text = msg.content
-          .filter((c) => c.type === "text")
-          .map((c) => (c.type === "text" ? c.text : ""))
-          .join("\n");
-        inputMessages.push({ role: "user", content: text || " " });
+        // User messages may carry text AND/OR tool_result blocks (agent-runner format).
+        const textParts: string[] = [];
+        for (const c of msg.content) {
+          if (c.type === "text") textParts.push(c.text);
+          if (c.type === "tool_result") {
+            const output = typeof c.output === "string" ? c.output : JSON.stringify(c.output);
+            inputMessages.push({
+              type: "function_call_output",
+              call_id: c.toolCallId,
+              output,
+            });
+          }
+        }
+        const text = textParts.join("\n");
+        if (text) inputMessages.push({ role: "user", content: text });
         continue;
       }
       if (msg.role === "assistant") {
-        const text = msg.content
-          .filter((c) => c.type === "text")
-          .map((c) => (c.type === "text" ? c.text : ""))
-          .join("");
+        // Assistant messages may carry text AND/OR tool_use blocks. Tool_use becomes
+        // a function_call item so the model sees its own prior call. Use the wire-name
+        // (sanitized) so it matches the tools array; reverse-mapping happens on incoming.
+        const textParts: string[] = [];
+        for (const c of msg.content) {
+          if (c.type === "text") textParts.push(c.text);
+          if (c.type === "tool_use") {
+            const wireName = nameMap.originalToWire.get(c.name) ?? c.name;
+            const args =
+              typeof c.input === "string" ? c.input : JSON.stringify(c.input ?? {});
+            inputMessages.push({
+              type: "function_call",
+              call_id: c.toolCallId,
+              name: wireName,
+              arguments: args,
+            });
+          }
+        }
+        const text = textParts.join("");
         if (text) inputMessages.push({ role: "assistant", content: text });
       }
     }
@@ -632,7 +669,6 @@ export class OpenAIProvider implements Provider {
         ...(this.extraParams ?? {}),
       };
 
-      // Retry wraps stream creation only — not the iteration.
       const stream = await withRetry(
         () => responsesApi.create(params),
         this.retryOpts,

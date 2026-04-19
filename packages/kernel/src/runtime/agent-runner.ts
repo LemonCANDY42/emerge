@@ -79,6 +79,15 @@ export interface AgentRunnerDeps {
   verification?: VerificationConfig | undefined;
   /** M3b: adjudicator agent id from KernelConfig.roles — used for verification routing. */
   adjudicatorId?: AgentId | undefined;
+  /**
+   * Session mode from KernelConfig. When set to "auto" or "bypass", the agent-runner
+   * skips the per-tool defaultMode="ask" human-prompt path (which would otherwise
+   * deadlock for autonomous sessions like CI / eval / unattended runs).
+   * Tools with defaultMode="deny" are still hard-denied regardless of session mode.
+   * Default: "auto" (autonomous), matching the most common emerge use case.
+   * See ADR 0008 (operating modes) for the mode-vs-tool-permission semantics.
+   */
+  sessionMode?: string | undefined;
 }
 
 function makeCard(spec: AgentSpec, provider: Provider): AgentCard {
@@ -1017,7 +1026,14 @@ export class AgentRunner implements AgentHandle {
             continue;
           }
 
-          if (permDefaultMode === "ask") {
+          // Session-mode override: in autonomous modes, skip the human ask path.
+          // Tools with defaultMode="deny" are still hard-denied above; only "ask" is
+          // affected. This matches Claude Code / Codex behavior where mode "auto" means
+          // autonomous tool use without per-call human confirmation.
+          const sessMode = this.deps.sessionMode ?? "auto";
+          const autonomousMode = sessMode === "auto" || sessMode === "bypass";
+
+          if (permDefaultMode === "ask" && !autonomousMode) {
             // Emit a human.request and block until human.reply or human.timeout (60s default)
             await bus.send({
               kind: "human.request",
