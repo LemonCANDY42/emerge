@@ -12,7 +12,7 @@ contracts. If the contracts wobble, every implementation wobbles with them.
 ## Decision
 
 - The first commit publishes contracts before *any* implementation.
-- All cross-package coupling goes through `@emerge/kernel/contracts`.
+- All cross-package coupling goes through `@lwrf42/emerge-kernel/contracts`.
 - Contract changes require an ADR or an issue with a design discussion;
   no contract changes via casual PRs.
 - Contracts use **branded primitive types** (e.g. `AgentId`, `TaskId`) to

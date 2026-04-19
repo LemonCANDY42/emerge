@@ -1,5 +1,5 @@
 /**
- * @emerge/tools — built-in tools using sandbox for permission gating.
+ * @lwrf42/emerge-tools — built-in tools using sandbox for permission gating.
  */
 
 import { exec } from "node:child_process";
@@ -16,8 +16,8 @@ import type {
   Tool,
   ToolInvocation,
   ToolResult,
-} from "@emerge/kernel/contracts";
-import { applyTruncationNotice } from "@emerge/kernel/runtime";
+} from "@lwrf42/emerge-kernel/contracts";
+import { applyTruncationNotice } from "@lwrf42/emerge-kernel/runtime";
 import { z } from "zod";
 
 void createReadStream;
@@ -66,8 +66,8 @@ function resolveConstrainedPath(
 // Cast through unknown rather than weaken the function signature.
 function zodToSchemaRef<T extends z.ZodTypeAny>(
   schema: T,
-): import("@emerge/kernel/contracts").SchemaRef {
-  return schema as unknown as import("@emerge/kernel/contracts").SchemaRef;
+): import("@lwrf42/emerge-kernel/contracts").SchemaRef {
+  return schema as unknown as import("@lwrf42/emerge-kernel/contracts").SchemaRef;
 }
 
 // --- fs.read ---

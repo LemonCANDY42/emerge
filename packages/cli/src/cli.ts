@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * @emerge/cli — entry point for the `emerge` command.
+ * @lwrf42/emerge-cli — entry point for the `emerge` command.
  *
  * Subcommands:
  *   emerge run <blueprint.yaml>       — run a configured agent

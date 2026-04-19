@@ -17,8 +17,8 @@
  *   q               : exit
  */
 
-import type { AgentId, SessionId } from "@emerge/kernel/contracts";
-import { JSONL_SCHEMA_VERSION, type JsonlEvent } from "@emerge/kernel/contracts";
+import type { AgentId, SessionId } from "@lwrf42/emerge-kernel/contracts";
+import { JSONL_SCHEMA_VERSION, type JsonlEvent } from "@lwrf42/emerge-kernel/contracts";
 import { render } from "ink-testing-library";
 import React from "react";
 import { describe, expect, it } from "vitest";
@@ -33,7 +33,7 @@ function makeLifecycle(agent: AgentId, transition: string, at = Date.now()): Jso
     type: "lifecycle",
     at,
     agent,
-    transition: transition as import("@emerge/kernel/contracts").AgentState,
+    transition: transition as import("@lwrf42/emerge-kernel/contracts").AgentState,
   };
 }
 

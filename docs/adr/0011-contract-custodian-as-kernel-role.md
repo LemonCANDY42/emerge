@@ -40,5 +40,5 @@ structurally incapable of forgetting them.
 
 - A session without a Custodian degrades to "trust mode" — the kernel
   will not enforce contract invariants. We document this prominently.
-- The Custodian's behavior lives in `@emerge/agents`; only the
+- The Custodian's behavior lives in `@lwrf42/emerge-agents`; only the
   *interface* is in the kernel.

@@ -16,7 +16,7 @@
  * is private to this session; other kernels and sessions are unaffected.
  */
 
-import { buildAdjudicator } from "@emerge/agents";
+import { buildAdjudicator } from "@lwrf42/emerge-agents";
 import type {
   AgentId,
   ContractId,
@@ -27,14 +27,14 @@ import type {
   Tool,
   ToolSpec,
   Verdict,
-} from "@emerge/kernel/contracts";
-import type { ToolRegistry } from "@emerge/kernel/contracts";
-import { Kernel } from "@emerge/kernel/runtime";
-import type { KernelDeps, SchemaAdapter } from "@emerge/kernel/runtime";
-import { HarborSandbox } from "@emerge/sandbox-harbor";
-import { InProcSandbox } from "@emerge/sandbox-inproc";
-import { CalibratedSurveillance } from "@emerge/surveillance";
-import { makeBashTool, makeFsReadTool, makeFsWriteTool } from "@emerge/tools";
+} from "@lwrf42/emerge-kernel/contracts";
+import type { ToolRegistry } from "@lwrf42/emerge-kernel/contracts";
+import { Kernel } from "@lwrf42/emerge-kernel/runtime";
+import type { KernelDeps, SchemaAdapter } from "@lwrf42/emerge-kernel/runtime";
+import { HarborSandbox } from "@lwrf42/emerge-sandbox-harbor";
+import { InProcSandbox } from "@lwrf42/emerge-sandbox-inproc";
+import { CalibratedSurveillance } from "@lwrf42/emerge-surveillance";
+import { makeBashTool, makeFsReadTool, makeFsWriteTool } from "@lwrf42/emerge-tools";
 import type { AcceptanceSandbox } from "./acceptance-runner.js";
 import { makeAcceptanceEvaluator } from "./acceptance-runner.js";
 import type { TaskSpec } from "./task-loader.js";
@@ -106,8 +106,8 @@ export interface SessionBuilderOptions {
    * shapes for tool specs. Pass the provider-specific adapter so tool schemas
    * are correctly adapted before being sent to the model.
    *
-   * For OpenAI: import { openaiSchemaAdapter } from "@emerge/provider-openai"
-   * For Anthropic: import { anthropicSchemaAdapter } from "@emerge/provider-anthropic"
+   * For OpenAI: import { openaiSchemaAdapter } from "@lwrf42/emerge-provider-openai"
+   * For Anthropic: import { anthropicSchemaAdapter } from "@lwrf42/emerge-provider-anthropic"
    * For MockProvider (tests): omit — no adapter needed.
    */
   readonly schemaAdapter?: SchemaAdapter;
@@ -128,18 +128,18 @@ export interface SessionBuilderOptions {
    *
    * Used by tbench-real-replay Phase 2.
    */
-  readonly replayRecord?: import("@emerge/kernel/contracts").SessionRecord | undefined;
+  readonly replayRecord?: import("@lwrf42/emerge-kernel/contracts").SessionRecord | undefined;
   /**
    * Factory that wraps a SessionRecord + original Provider into a replay
    * provider. Must be provided together with replayRecord.
    *
    * Example:
-   *   import { RecordedProvider } from "@emerge/replay";
+   *   import { RecordedProvider } from "@lwrf42/emerge-replay";
    *   replayProviderFactory: (rec, original) => new RecordedProvider(rec, original.capabilities)
    */
   readonly replayProviderFactory?:
     | ((
-        record: import("@emerge/kernel/contracts").SessionRecord,
+        record: import("@lwrf42/emerge-kernel/contracts").SessionRecord,
         originalProvider: Provider,
       ) => Provider)
     | undefined;
@@ -234,7 +234,7 @@ export function buildSession(opts: SessionBuilderOptions): BuiltSession {
   // Tool-level sandbox policy: the real authorization gate for inproc mode.
   // For harbor mode, HarborSandbox provides Docker-based isolation for process_spawn;
   // FS and state effects run in-process. Network effects are denied at the tool level.
-  const inprocPolicy: import("@emerge/kernel/contracts").PermissionPolicy = {
+  const inprocPolicy: import("@lwrf42/emerge-kernel/contracts").PermissionPolicy = {
     fs: { read: "auto", write: "auto", delete: "deny" },
     net: { read: "deny", write: "deny" },
     process: { spawn: "auto", kill: "deny" },
@@ -263,7 +263,7 @@ export function buildSession(opts: SessionBuilderOptions): BuiltSession {
   const toolSandbox =
     sandboxMode === "harbor" ? new HarborSandbox(harborOpts) : new InProcSandbox(inprocPolicy);
   // kernelPolicy: allow all effects — real authorization is inside each tool's sandbox.
-  const kernelPolicy: import("@emerge/kernel/contracts").PermissionPolicy = {
+  const kernelPolicy: import("@lwrf42/emerge-kernel/contracts").PermissionPolicy = {
     fs: { read: "auto", write: "auto", delete: "auto" },
     net: { read: "auto", write: "auto" },
     process: { spawn: "auto", kill: "auto" },

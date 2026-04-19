@@ -27,7 +27,7 @@
 
 import { exec, execFile } from "node:child_process";
 import { promisify } from "node:util";
-import type { EvaluationInput, Verdict } from "@emerge/kernel/contracts";
+import type { EvaluationInput, Verdict } from "@lwrf42/emerge-kernel/contracts";
 
 const execAsync = promisify(exec);
 const execFileAsync = promisify(execFile);

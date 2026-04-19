@@ -1,5 +1,5 @@
 /**
- * Public contract surface for @emerge/kernel.
+ * Public contract surface for @lwrf42/emerge-kernel.
  *
  * This is the file every implementation package builds against. Changes here
  * are versioned carefully — see CLAUDE.md and ARCHITECTURE.md.

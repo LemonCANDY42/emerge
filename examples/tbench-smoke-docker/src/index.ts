@@ -24,9 +24,9 @@ import {
   makeTerminalBenchBlueprint,
   materializeTask,
   runAcceptance,
-} from "@emerge/eval-terminal-bench";
-import type { ProviderEvent } from "@emerge/kernel/contracts";
-import { MockProvider } from "@emerge/provider-mock";
+} from "@lwrf42/emerge-eval-terminal-bench";
+import type { ProviderEvent } from "@lwrf42/emerge-kernel/contracts";
+import { MockProvider } from "@lwrf42/emerge-provider-mock";
 
 // ─── Task spec ───────────────────────────────────────────────────────────────
 

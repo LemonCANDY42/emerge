@@ -1,4 +1,4 @@
-# @emerge/surveillance
+# @lwrf42/emerge-surveillance
 
 Model capability surveillance and adaptive decomposition for the emerge agent harness.
 
@@ -9,18 +9,18 @@ v0.1.0 — early. Surveillance hint loop verified end-to-end — see VERIFICATIO
 ## Install
 
 ```bash
-npm install @emerge/surveillance
+npm install @lwrf42/emerge-surveillance
 ```
 
 ## Quick example
 
 ```ts
-import { SurveillanceModule } from "@emerge/surveillance";
+import { SurveillanceModule } from "@lwrf42/emerge-surveillance";
 
 const surveillance = new SurveillanceModule({
   probeInterval: 3,          // probe every N turns
   decompositionThreshold: 0.4, // re-plan below this competence score
-  experienceLibrary,         // optional: @emerge/experience-inmemory
+  experienceLibrary,         // optional: @lwrf42/emerge-experience-inmemory
 });
 
 const kernel = new Kernel({ surveillance, provider, telemetry });

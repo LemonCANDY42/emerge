@@ -24,7 +24,7 @@ import type {
   Result,
   SessionId,
   SessionRecord,
-} from "@emerge/kernel/contracts";
+} from "@lwrf42/emerge-kernel/contracts";
 
 export interface BuildPostmortemOptions {
   readonly id: AgentId;

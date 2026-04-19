@@ -4,8 +4,8 @@
  * No side-effects. No React. Fully testable without Ink.
  */
 
-import type { AgentId } from "@emerge/kernel/contracts";
-import type { JsonlEvent } from "@emerge/kernel/contracts";
+import type { AgentId } from "@lwrf42/emerge-kernel/contracts";
+import type { JsonlEvent } from "@lwrf42/emerge-kernel/contracts";
 import {
   type AgentNode,
   type AgentUsage,
@@ -76,7 +76,7 @@ function applyEnvelope(
 
 function applyHandshake(
   state: TuiState,
-  env: Extract<import("@emerge/kernel/contracts").BusEnvelope, { kind: "handshake" }>,
+  env: Extract<import("@lwrf42/emerge-kernel/contracts").BusEnvelope, { kind: "handshake" }>,
 ): TuiState {
   const card = env.card;
   const existing = state.agents.get(card.id);
@@ -95,7 +95,7 @@ function applyHandshake(
 function applyVerdict(
   state: TuiState,
   at: number,
-  env: Extract<import("@emerge/kernel/contracts").BusEnvelope, { kind: "verdict" }>,
+  env: Extract<import("@lwrf42/emerge-kernel/contracts").BusEnvelope, { kind: "verdict" }>,
 ): TuiState {
   const verdict = env.verdict;
 

@@ -147,7 +147,7 @@ async function fixBug(bugDescription: string, testCommand: string) {
 
 2. **Context window runs out mid-large-refactor** — Use code agent in supervisor + worker topology. Supervisor decomposes into module-sized chunks; each worker refactors one module.
 
-3. **Agent overwrites important code** — Restrict fs.write to a subdirectory. Use workspace isolation (`@emerge/workspaces-git-worktree`) so changes are in a separate git worktree.
+3. **Agent overwrites important code** — Restrict fs.write to a subdirectory. Use workspace isolation (`@lwrf42/emerge-workspaces-git-worktree`) so changes are in a separate git worktree.
 
 4. **Shell execution spawns infinite loops** — Set termination.done to timeout or max iterations. Add shell.exec timeout (e.g., 30 seconds per command).
 

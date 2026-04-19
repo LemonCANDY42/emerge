@@ -11,8 +11,8 @@
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { JSONL_SCHEMA_VERSION } from "@emerge/kernel/contracts";
-import type { JsonlEvent } from "@emerge/kernel/contracts";
+import { JSONL_SCHEMA_VERSION } from "@lwrf42/emerge-kernel/contracts";
+import type { JsonlEvent } from "@lwrf42/emerge-kernel/contracts";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { WebSocket } from "ws";
 import { startServer } from "./index.js";
@@ -25,8 +25,8 @@ function makeLifecycleEvent(at: number): JsonlEvent {
     v: JSONL_SCHEMA_VERSION,
     type: "lifecycle",
     at,
-    agent: "test-agent" as import("@emerge/kernel/contracts").AgentId,
-    transition: "thinking" as import("@emerge/kernel/contracts").AgentState,
+    agent: "test-agent" as import("@lwrf42/emerge-kernel/contracts").AgentId,
+    transition: "thinking" as import("@lwrf42/emerge-kernel/contracts").AgentState,
   };
 }
 
@@ -35,8 +35,8 @@ function makeSessionStart(at: number): JsonlEvent {
     v: JSONL_SCHEMA_VERSION,
     type: "session.start",
     at,
-    sessionId: "sess-1" as import("@emerge/kernel/contracts").SessionId,
-    contractRef: "contract-1" as import("@emerge/kernel/contracts").ContractId,
+    sessionId: "sess-1" as import("@lwrf42/emerge-kernel/contracts").SessionId,
+    contractRef: "contract-1" as import("@lwrf42/emerge-kernel/contracts").ContractId,
   };
 }
 

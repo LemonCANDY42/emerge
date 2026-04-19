@@ -34,7 +34,7 @@ export async function probeCommand(providerConfigArg: string): Promise<void> {
 
   if (providerId !== "mock") {
     console.error(
-      `[emerge probe] Provider "${providerId}" is not supported by the CLI in v1.\nUse the library API to run probes against real providers:\n  import { CalibratedSurveillance } from "@emerge/surveillance";\n  const surv = new CalibratedSurveillance();\n  await surv.runProbesAsync(provider, signal);`,
+      `[emerge probe] Provider "${providerId}" is not supported by the CLI in v1.\nUse the library API to run probes against real providers:\n  import { CalibratedSurveillance } from "@lwrf42/emerge-surveillance";\n  const surv = new CalibratedSurveillance();\n  await surv.runProbesAsync(provider, signal);`,
     );
     process.exit(1);
   }

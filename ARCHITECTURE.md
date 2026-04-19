@@ -30,7 +30,7 @@ decomposition or escalation.
    └────────┴────────┴────────┴────────┴────────────┴─────────┘
 ```
 
-Every box below `kernel` is a **contract** in `@emerge/kernel/contracts`,
+Every box below `kernel` is a **contract** in `@lwrf42/emerge-kernel/contracts`,
 implemented in its own package. Every box above is built *on* those contracts.
 
 ## The kernel
@@ -238,7 +238,7 @@ considered and consequences.
 
 ## Stability promises
 
-- **Contracts first.** Contracts in `@emerge/kernel/contracts` are versioned
+- **Contracts first.** Contracts in `@lwrf42/emerge-kernel/contracts` are versioned
   carefully and changes are an explicit decision.
 - **Modules are second.** Module APIs may change before a 1.0 of that
   module.

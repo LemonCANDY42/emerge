@@ -10,7 +10,7 @@
  * full session history up to the moment of their connection.
  */
 
-import type { JsonlEvent } from "@emerge/kernel/contracts";
+import type { JsonlEvent } from "@lwrf42/emerge-kernel/contracts";
 import type { WebSocket } from "ws";
 
 const PING_INTERVAL_MS = 30_000;

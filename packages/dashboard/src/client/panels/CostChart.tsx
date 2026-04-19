@@ -15,7 +15,7 @@
  * Each agent gets its own line in a distinct color.
  */
 
-import type { TuiState } from "@emerge/tui/state";
+import type { TuiState } from "@lwrf42/emerge-tui/state";
 import type React from "react";
 import { useMemo } from "react";
 

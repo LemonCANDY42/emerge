@@ -17,12 +17,12 @@ commit the agent produces and runs the task's acceptance tests.
 Emerge already has:
 
 - A kernel with surveillance, cycle guards, and quota management.
-- `@emerge/tools` with file-system tools (`makeFsReadTool`, `makeFsWriteTool`).
-- `@emerge/tools-mcp` for bridging MCP-compatible tool servers.
+- `@lwrf42/emerge-tools` with file-system tools (`makeFsReadTool`, `makeFsWriteTool`).
+- `@lwrf42/emerge-tools-mcp` for bridging MCP-compatible tool servers.
 - `CalibratedSurveillance.runProbesAsync()` for real per-provider capability
   measurement.
 - A `SchemaAdapter` layer for per-provider JSON Schema normalization.
-- Session replay (`@emerge/replay`) for debugging failed runs.
+- Session replay (`@lwrf42/emerge-replay`) for debugging failed runs.
 
 What is missing is a **task harness**: the glue between a Terminal-Bench task
 definition and an emerge session.
@@ -48,7 +48,7 @@ definition and an emerge session.
 
 ```
 packages/
-  bench-runner/         # @emerge/bench-runner (new)
+  bench-runner/         # @lwrf42/emerge-bench-runner (new)
     src/
       task-loader.ts    # parse Terminal-Bench task YAML / JSON spec
       session-builder.ts # wire task into an emerge session
@@ -75,7 +75,7 @@ interface TaskSpec {
 ```
 
 `task-loader.ts` reads the spec, clones the repo into an isolated workspace
-(`@emerge/workspaces-git-worktree` is the right primitive here), and resolves
+(`@lwrf42/emerge-workspaces-git-worktree` is the right primitive here), and resolves
 the base commit.
 
 ### 3.3 Session wiring
@@ -166,7 +166,7 @@ interference management. The cost outweighs any benefit.
 ### 5.2 Shell tool via MCP, not a first-class emerge tool
 
 `bash-mcp` (a reference MCP server for shell execution) is a natural fit for
-`@emerge/tools-mcp`. This keeps `@emerge/tools` free of shell-execution
+`@lwrf42/emerge-tools-mcp`. This keeps `@lwrf42/emerge-tools` free of shell-execution
 concerns and lets the bench runner swap in a sandboxed shell server without
 changing tool definitions.
 
@@ -179,7 +179,7 @@ meaningful: we measure actual capability, not assumed capability.
 ### 5.4 Session replay for post-mortem analysis
 
 Failed tasks should be debugged from the session artifact, not from logs.
-`@emerge/replay` can replay the session with a different provider or modified
+`@lwrf42/emerge-replay` can replay the session with a different provider or modified
 tools to root-cause failures without re-running the task from scratch.
 
 ---
@@ -210,7 +210,7 @@ tools to root-cause failures without re-running the task from scratch.
 
 3. **Task spec versioning** — Terminal-Bench tasks evolve. The `task-loader.ts`
    should version-pin the task spec hash used for a run so that results are
-   reproducible via `@emerge/replay`.
+   reproducible via `@lwrf42/emerge-replay`.
 
 4. **Rate limits during probing** — `runProbesAsync` fires 15 provider calls
    per probe set. For high-parallelism runs this may hit rate limits. Consider

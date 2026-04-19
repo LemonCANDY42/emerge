@@ -1,4 +1,4 @@
-# @emerge/experience-inmemory
+# @lwrf42/emerge-experience-inmemory
 
 In-memory `ExperienceLibrary` backend with postmortem analysis and surveillance hints for the emerge harness.
 
@@ -9,14 +9,14 @@ v0.1.0 — early. Custodian + Adjudicator + Postmortem auto-loop verified end-to
 ## Install
 
 ```bash
-npm install @emerge/experience-inmemory
+npm install @lwrf42/emerge-experience-inmemory
 ```
 
 ## Quick example
 
 ```ts
-import { InMemoryExperienceLibrary } from "@emerge/experience-inmemory";
-import { SurveillanceModule } from "@emerge/surveillance";
+import { InMemoryExperienceLibrary } from "@lwrf42/emerge-experience-inmemory";
+import { SurveillanceModule } from "@lwrf42/emerge-surveillance";
 
 const library = new InMemoryExperienceLibrary();
 

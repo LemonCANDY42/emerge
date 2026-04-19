@@ -22,10 +22,10 @@ importers:
 
   examples/cycle-guard-trip:
     dependencies:
-      '@emerge/kernel':
+      '@lwrf42/emerge-kernel':
         specifier: workspace:*
         version: link:../../packages/kernel
-      '@emerge/provider-mock':
+      '@lwrf42/emerge-provider-mock':
         specifier: workspace:*
         version: link:../../packages/providers/mock
     devDependencies:
@@ -35,16 +35,16 @@ importers:
 
   examples/dashboard-hello:
     dependencies:
-      '@emerge/agents':
+      '@lwrf42/emerge-agents':
         specifier: workspace:*
         version: link:../../packages/agents
-      '@emerge/kernel':
+      '@lwrf42/emerge-kernel':
         specifier: workspace:*
         version: link:../../packages/kernel
-      '@emerge/provider-mock':
+      '@lwrf42/emerge-provider-mock':
         specifier: workspace:*
         version: link:../../packages/providers/mock
-      '@emerge/replay':
+      '@lwrf42/emerge-replay':
         specifier: workspace:*
         version: link:../../packages/replay
     devDependencies:
@@ -54,13 +54,13 @@ importers:
 
   examples/eval-probes:
     dependencies:
-      '@emerge/kernel':
+      '@lwrf42/emerge-kernel':
         specifier: workspace:*
         version: link:../../packages/kernel
-      '@emerge/provider-mock':
+      '@lwrf42/emerge-provider-mock':
         specifier: workspace:*
         version: link:../../packages/providers/mock
-      '@emerge/surveillance':
+      '@lwrf42/emerge-surveillance':
         specifier: workspace:*
         version: link:../../packages/surveillance
     devDependencies:
@@ -70,25 +70,25 @@ importers:
 
   examples/hello-agent:
     dependencies:
-      '@emerge/kernel':
+      '@lwrf42/emerge-kernel':
         specifier: workspace:*
         version: link:../../packages/kernel
-      '@emerge/modes':
+      '@lwrf42/emerge-modes':
         specifier: workspace:*
         version: link:../../packages/modes
-      '@emerge/provider-mock':
+      '@lwrf42/emerge-provider-mock':
         specifier: workspace:*
         version: link:../../packages/providers/mock
-      '@emerge/replay':
+      '@lwrf42/emerge-replay':
         specifier: workspace:*
         version: link:../../packages/replay
-      '@emerge/sandbox-inproc':
+      '@lwrf42/emerge-sandbox-inproc':
         specifier: workspace:*
         version: link:../../packages/sandbox-inproc
-      '@emerge/telemetry-jsonl':
+      '@lwrf42/emerge-telemetry-jsonl':
         specifier: workspace:*
         version: link:../../packages/telemetry-jsonl
-      '@emerge/tools':
+      '@lwrf42/emerge-tools':
         specifier: workspace:*
         version: link:../../packages/tools
     devDependencies:
@@ -98,22 +98,22 @@ importers:
 
   examples/hello-agent-anthropic:
     dependencies:
-      '@emerge/kernel':
+      '@lwrf42/emerge-kernel':
         specifier: workspace:*
         version: link:../../packages/kernel
-      '@emerge/modes':
+      '@lwrf42/emerge-modes':
         specifier: workspace:*
         version: link:../../packages/modes
-      '@emerge/provider-anthropic':
+      '@lwrf42/emerge-provider-anthropic':
         specifier: workspace:*
         version: link:../../packages/providers/anthropic
-      '@emerge/replay':
+      '@lwrf42/emerge-replay':
         specifier: workspace:*
         version: link:../../packages/replay
-      '@emerge/sandbox-inproc':
+      '@lwrf42/emerge-sandbox-inproc':
         specifier: workspace:*
         version: link:../../packages/sandbox-inproc
-      '@emerge/tools':
+      '@lwrf42/emerge-tools':
         specifier: workspace:*
         version: link:../../packages/tools
     devDependencies:
@@ -123,22 +123,22 @@ importers:
 
   examples/hello-agent-custom-url:
     dependencies:
-      '@emerge/kernel':
+      '@lwrf42/emerge-kernel':
         specifier: workspace:*
         version: link:../../packages/kernel
-      '@emerge/modes':
+      '@lwrf42/emerge-modes':
         specifier: workspace:*
         version: link:../../packages/modes
-      '@emerge/provider-openai-compat':
+      '@lwrf42/emerge-provider-openai-compat':
         specifier: workspace:*
         version: link:../../packages/providers/openai-compat
-      '@emerge/replay':
+      '@lwrf42/emerge-replay':
         specifier: workspace:*
         version: link:../../packages/replay
-      '@emerge/sandbox-inproc':
+      '@lwrf42/emerge-sandbox-inproc':
         specifier: workspace:*
         version: link:../../packages/sandbox-inproc
-      '@emerge/tools':
+      '@lwrf42/emerge-tools':
         specifier: workspace:*
         version: link:../../packages/tools
     devDependencies:
@@ -148,22 +148,22 @@ importers:
 
   examples/hello-agent-openai:
     dependencies:
-      '@emerge/kernel':
+      '@lwrf42/emerge-kernel':
         specifier: workspace:*
         version: link:../../packages/kernel
-      '@emerge/modes':
+      '@lwrf42/emerge-modes':
         specifier: workspace:*
         version: link:../../packages/modes
-      '@emerge/provider-openai':
+      '@lwrf42/emerge-provider-openai':
         specifier: workspace:*
         version: link:../../packages/providers/openai
-      '@emerge/replay':
+      '@lwrf42/emerge-replay':
         specifier: workspace:*
         version: link:../../packages/replay
-      '@emerge/sandbox-inproc':
+      '@lwrf42/emerge-sandbox-inproc':
         specifier: workspace:*
         version: link:../../packages/sandbox-inproc
-      '@emerge/tools':
+      '@lwrf42/emerge-tools':
         specifier: workspace:*
         version: link:../../packages/tools
     devDependencies:
@@ -173,16 +173,16 @@ importers:
 
   examples/hello-mcp:
     dependencies:
-      '@emerge/kernel':
+      '@lwrf42/emerge-kernel':
         specifier: workspace:*
         version: link:../../packages/kernel
-      '@emerge/provider-mock':
+      '@lwrf42/emerge-provider-mock':
         specifier: workspace:*
         version: link:../../packages/providers/mock
-      '@emerge/sandbox-inproc':
+      '@lwrf42/emerge-sandbox-inproc':
         specifier: workspace:*
         version: link:../../packages/sandbox-inproc
-      '@emerge/tools-mcp':
+      '@lwrf42/emerge-tools-mcp':
         specifier: workspace:*
         version: link:../../packages/tools-mcp
       '@modelcontextprotocol/sdk':
@@ -198,13 +198,13 @@ importers:
 
   examples/otel-phoenix:
     dependencies:
-      '@emerge/kernel':
+      '@lwrf42/emerge-kernel':
         specifier: workspace:*
         version: link:../../packages/kernel
-      '@emerge/provider-mock':
+      '@lwrf42/emerge-provider-mock':
         specifier: workspace:*
         version: link:../../packages/providers/mock
-      '@emerge/telemetry-otel':
+      '@lwrf42/emerge-telemetry-otel':
         specifier: workspace:*
         version: link:../../packages/telemetry-otel
       '@opentelemetry/api':
@@ -229,19 +229,19 @@ importers:
 
   examples/replay-smoke:
     dependencies:
-      '@emerge/kernel':
+      '@lwrf42/emerge-kernel':
         specifier: workspace:*
         version: link:../../packages/kernel
-      '@emerge/modes':
+      '@lwrf42/emerge-modes':
         specifier: workspace:*
         version: link:../../packages/modes
-      '@emerge/provider-mock':
+      '@lwrf42/emerge-provider-mock':
         specifier: workspace:*
         version: link:../../packages/providers/mock
-      '@emerge/replay':
+      '@lwrf42/emerge-replay':
         specifier: workspace:*
         version: link:../../packages/replay
-      '@emerge/sandbox-inproc':
+      '@lwrf42/emerge-sandbox-inproc':
         specifier: workspace:*
         version: link:../../packages/sandbox-inproc
     devDependencies:
@@ -251,16 +251,16 @@ importers:
 
   examples/tbench-real-docker:
     dependencies:
-      '@emerge/eval-terminal-bench':
+      '@lwrf42/emerge-eval-terminal-bench':
         specifier: workspace:*
         version: link:../../packages/eval-terminal-bench
-      '@emerge/kernel':
+      '@lwrf42/emerge-kernel':
         specifier: workspace:*
         version: link:../../packages/kernel
-      '@emerge/provider-openai':
+      '@lwrf42/emerge-provider-openai':
         specifier: workspace:*
         version: link:../../packages/providers/openai
-      '@emerge/sandbox-harbor':
+      '@lwrf42/emerge-sandbox-harbor':
         specifier: workspace:*
         version: link:../../packages/sandbox-harbor
     devDependencies:
@@ -270,16 +270,16 @@ importers:
 
   examples/tbench-real-inline:
     dependencies:
-      '@emerge/eval-terminal-bench':
+      '@lwrf42/emerge-eval-terminal-bench':
         specifier: workspace:*
         version: link:../../packages/eval-terminal-bench
-      '@emerge/kernel':
+      '@lwrf42/emerge-kernel':
         specifier: workspace:*
         version: link:../../packages/kernel
-      '@emerge/provider-openai':
+      '@lwrf42/emerge-provider-openai':
         specifier: workspace:*
         version: link:../../packages/providers/openai
-      '@emerge/sandbox-inproc':
+      '@lwrf42/emerge-sandbox-inproc':
         specifier: workspace:*
         version: link:../../packages/sandbox-inproc
     devDependencies:
@@ -289,16 +289,16 @@ importers:
 
   examples/tbench-real-multi:
     dependencies:
-      '@emerge/eval-terminal-bench':
+      '@lwrf42/emerge-eval-terminal-bench':
         specifier: workspace:*
         version: link:../../packages/eval-terminal-bench
-      '@emerge/kernel':
+      '@lwrf42/emerge-kernel':
         specifier: workspace:*
         version: link:../../packages/kernel
-      '@emerge/provider-openai':
+      '@lwrf42/emerge-provider-openai':
         specifier: workspace:*
         version: link:../../packages/providers/openai
-      '@emerge/sandbox-inproc':
+      '@lwrf42/emerge-sandbox-inproc':
         specifier: workspace:*
         version: link:../../packages/sandbox-inproc
     devDependencies:
@@ -308,19 +308,19 @@ importers:
 
   examples/tbench-real-replay:
     dependencies:
-      '@emerge/eval-terminal-bench':
+      '@lwrf42/emerge-eval-terminal-bench':
         specifier: workspace:*
         version: link:../../packages/eval-terminal-bench
-      '@emerge/kernel':
+      '@lwrf42/emerge-kernel':
         specifier: workspace:*
         version: link:../../packages/kernel
-      '@emerge/provider-openai':
+      '@lwrf42/emerge-provider-openai':
         specifier: workspace:*
         version: link:../../packages/providers/openai
-      '@emerge/replay':
+      '@lwrf42/emerge-replay':
         specifier: workspace:*
         version: link:../../packages/replay
-      '@emerge/sandbox-inproc':
+      '@lwrf42/emerge-sandbox-inproc':
         specifier: workspace:*
         version: link:../../packages/sandbox-inproc
     devDependencies:
@@ -330,16 +330,16 @@ importers:
 
   examples/tbench-smoke-docker:
     dependencies:
-      '@emerge/eval-terminal-bench':
+      '@lwrf42/emerge-eval-terminal-bench':
         specifier: workspace:*
         version: link:../../packages/eval-terminal-bench
-      '@emerge/kernel':
+      '@lwrf42/emerge-kernel':
         specifier: workspace:*
         version: link:../../packages/kernel
-      '@emerge/provider-mock':
+      '@lwrf42/emerge-provider-mock':
         specifier: workspace:*
         version: link:../../packages/providers/mock
-      '@emerge/sandbox-harbor':
+      '@lwrf42/emerge-sandbox-harbor':
         specifier: workspace:*
         version: link:../../packages/sandbox-harbor
     devDependencies:
@@ -349,16 +349,16 @@ importers:
 
   examples/tbench-smoke-inline:
     dependencies:
-      '@emerge/eval-terminal-bench':
+      '@lwrf42/emerge-eval-terminal-bench':
         specifier: workspace:*
         version: link:../../packages/eval-terminal-bench
-      '@emerge/kernel':
+      '@lwrf42/emerge-kernel':
         specifier: workspace:*
         version: link:../../packages/kernel
-      '@emerge/provider-mock':
+      '@lwrf42/emerge-provider-mock':
         specifier: workspace:*
         version: link:../../packages/providers/mock
-      '@emerge/sandbox-inproc':
+      '@lwrf42/emerge-sandbox-inproc':
         specifier: workspace:*
         version: link:../../packages/sandbox-inproc
     devDependencies:
@@ -368,19 +368,19 @@ importers:
 
   examples/topology-supervisor-worker:
     dependencies:
-      '@emerge/agents':
+      '@lwrf42/emerge-agents':
         specifier: workspace:*
         version: link:../../packages/agents
-      '@emerge/experience-inmemory':
+      '@lwrf42/emerge-experience-inmemory':
         specifier: workspace:*
         version: link:../../packages/experience-inmemory
-      '@emerge/kernel':
+      '@lwrf42/emerge-kernel':
         specifier: workspace:*
         version: link:../../packages/kernel
-      '@emerge/provider-mock':
+      '@lwrf42/emerge-provider-mock':
         specifier: workspace:*
         version: link:../../packages/providers/mock
-      '@emerge/replay':
+      '@lwrf42/emerge-replay':
         specifier: workspace:*
         version: link:../../packages/replay
     devDependencies:
@@ -390,22 +390,22 @@ importers:
 
   examples/types-smoke:
     dependencies:
-      '@emerge/kernel':
+      '@lwrf42/emerge-kernel':
         specifier: workspace:*
         version: link:../../packages/kernel
 
   examples/weak-model-decomposition:
     dependencies:
-      '@emerge/kernel':
+      '@lwrf42/emerge-kernel':
         specifier: workspace:*
         version: link:../../packages/kernel
-      '@emerge/modes':
+      '@lwrf42/emerge-modes':
         specifier: workspace:*
         version: link:../../packages/modes
-      '@emerge/provider-mock':
+      '@lwrf42/emerge-provider-mock':
         specifier: workspace:*
         version: link:../../packages/providers/mock
-      '@emerge/surveillance':
+      '@lwrf42/emerge-surveillance':
         specifier: workspace:*
         version: link:../../packages/surveillance
     devDependencies:
@@ -415,8 +415,8 @@ importers:
 
   packages/agents:
     dependencies:
-      '@emerge/kernel':
-        specifier: workspace:*
+      '@lwrf42/emerge-kernel':
+        specifier: workspace:^0.1.0
         version: link:../kernel
     devDependencies:
       '@types/node':
@@ -425,8 +425,8 @@ importers:
 
   packages/artifacts-local-fs:
     dependencies:
-      '@emerge/kernel':
-        specifier: workspace:*
+      '@lwrf42/emerge-kernel':
+        specifier: workspace:^0.1.0
         version: link:../kernel
     devDependencies:
       '@types/node':
@@ -435,17 +435,17 @@ importers:
 
   packages/cli:
     dependencies:
-      '@emerge/kernel':
-        specifier: workspace:*
+      '@lwrf42/emerge-kernel':
+        specifier: workspace:^0.1.0
         version: link:../kernel
-      '@emerge/provider-mock':
-        specifier: workspace:*
+      '@lwrf42/emerge-provider-mock':
+        specifier: workspace:^0.1.0
         version: link:../providers/mock
-      '@emerge/replay':
-        specifier: workspace:*
+      '@lwrf42/emerge-replay':
+        specifier: workspace:^0.1.0
         version: link:../replay
-      '@emerge/telemetry-jsonl':
-        specifier: workspace:*
+      '@lwrf42/emerge-telemetry-jsonl':
+        specifier: workspace:^0.1.0
         version: link:../telemetry-jsonl
       commander:
         specifier: ^12.1.0
@@ -463,11 +463,11 @@ importers:
 
   packages/dashboard:
     dependencies:
-      '@emerge/kernel':
-        specifier: workspace:*
+      '@lwrf42/emerge-kernel':
+        specifier: workspace:^0.1.0
         version: link:../kernel
-      '@emerge/tui':
-        specifier: workspace:*
+      '@lwrf42/emerge-tui':
+        specifier: workspace:^0.1.0
         version: link:../tui
       commander:
         specifier: ^12.1.0
@@ -521,29 +521,29 @@ importers:
 
   packages/eval-terminal-bench:
     dependencies:
-      '@emerge/agents':
-        specifier: workspace:*
+      '@lwrf42/emerge-agents':
+        specifier: workspace:^0.1.0
         version: link:../agents
-      '@emerge/kernel':
-        specifier: workspace:*
+      '@lwrf42/emerge-kernel':
+        specifier: workspace:^0.1.0
         version: link:../kernel
-      '@emerge/provider-mock':
-        specifier: workspace:*
+      '@lwrf42/emerge-provider-mock':
+        specifier: workspace:^0.1.0
         version: link:../providers/mock
-      '@emerge/sandbox-harbor':
-        specifier: workspace:*
+      '@lwrf42/emerge-sandbox-harbor':
+        specifier: workspace:^0.1.0
         version: link:../sandbox-harbor
-      '@emerge/sandbox-inproc':
-        specifier: workspace:*
+      '@lwrf42/emerge-sandbox-inproc':
+        specifier: workspace:^0.1.0
         version: link:../sandbox-inproc
-      '@emerge/surveillance':
-        specifier: workspace:*
+      '@lwrf42/emerge-surveillance':
+        specifier: workspace:^0.1.0
         version: link:../surveillance
-      '@emerge/tools':
-        specifier: workspace:*
+      '@lwrf42/emerge-tools':
+        specifier: workspace:^0.1.0
         version: link:../tools
-      '@emerge/workspaces-git-worktree':
-        specifier: workspace:*
+      '@lwrf42/emerge-workspaces-git-worktree':
+        specifier: workspace:^0.1.0
         version: link:../workspaces-git-worktree
       yaml:
         specifier: ^2.6.1
@@ -558,8 +558,8 @@ importers:
 
   packages/experience-inmemory:
     dependencies:
-      '@emerge/kernel':
-        specifier: workspace:*
+      '@lwrf42/emerge-kernel':
+        specifier: workspace:^0.1.0
         version: link:../kernel
     devDependencies:
       '@types/node':
@@ -574,8 +574,8 @@ importers:
 
   packages/modes:
     dependencies:
-      '@emerge/kernel':
-        specifier: workspace:*
+      '@lwrf42/emerge-kernel':
+        specifier: workspace:^0.1.0
         version: link:../kernel
 
   packages/providers/anthropic:
@@ -583,8 +583,8 @@ importers:
       '@anthropic-ai/sdk':
         specifier: ^0.39.0
         version: 0.39.0
-      '@emerge/kernel':
-        specifier: workspace:*
+      '@lwrf42/emerge-kernel':
+        specifier: workspace:^0.1.0
         version: link:../../kernel
     devDependencies:
       '@types/node':
@@ -593,14 +593,14 @@ importers:
 
   packages/providers/mock:
     dependencies:
-      '@emerge/kernel':
-        specifier: workspace:*
+      '@lwrf42/emerge-kernel':
+        specifier: workspace:^0.1.0
         version: link:../../kernel
 
   packages/providers/openai:
     dependencies:
-      '@emerge/kernel':
-        specifier: workspace:*
+      '@lwrf42/emerge-kernel':
+        specifier: workspace:^0.1.0
         version: link:../../kernel
       openai:
         specifier: ^4.80.0
@@ -612,11 +612,11 @@ importers:
 
   packages/providers/openai-compat:
     dependencies:
-      '@emerge/kernel':
-        specifier: workspace:*
+      '@lwrf42/emerge-kernel':
+        specifier: workspace:^0.1.0
         version: link:../../kernel
-      '@emerge/provider-openai':
-        specifier: workspace:*
+      '@lwrf42/emerge-provider-openai':
+        specifier: workspace:^0.1.0
         version: link:../openai
     devDependencies:
       '@types/node':
@@ -625,8 +625,8 @@ importers:
 
   packages/replay:
     dependencies:
-      '@emerge/kernel':
-        specifier: workspace:*
+      '@lwrf42/emerge-kernel':
+        specifier: workspace:^0.1.0
         version: link:../kernel
     devDependencies:
       '@types/node':
@@ -635,8 +635,8 @@ importers:
 
   packages/sandbox-harbor:
     dependencies:
-      '@emerge/kernel':
-        specifier: workspace:*
+      '@lwrf42/emerge-kernel':
+        specifier: workspace:^0.1.0
         version: link:../kernel
     devDependencies:
       '@types/node':
@@ -645,20 +645,20 @@ importers:
 
   packages/sandbox-inproc:
     dependencies:
-      '@emerge/kernel':
-        specifier: workspace:*
+      '@lwrf42/emerge-kernel':
+        specifier: workspace:^0.1.0
         version: link:../kernel
 
   packages/surveillance:
     dependencies:
-      '@emerge/kernel':
-        specifier: workspace:*
+      '@lwrf42/emerge-kernel':
+        specifier: workspace:^0.1.0
         version: link:../kernel
 
   packages/telemetry-jsonl:
     dependencies:
-      '@emerge/kernel':
-        specifier: workspace:*
+      '@lwrf42/emerge-kernel':
+        specifier: workspace:^0.1.0
         version: link:../kernel
     devDependencies:
       '@types/node':
@@ -667,8 +667,8 @@ importers:
 
   packages/telemetry-otel:
     dependencies:
-      '@emerge/kernel':
-        specifier: workspace:*
+      '@lwrf42/emerge-kernel':
+        specifier: workspace:^0.1.0
         version: link:../kernel
     devDependencies:
       '@opentelemetry/api':
@@ -683,8 +683,8 @@ importers:
 
   packages/tools:
     dependencies:
-      '@emerge/kernel':
-        specifier: workspace:*
+      '@lwrf42/emerge-kernel':
+        specifier: workspace:^0.1.0
         version: link:../kernel
       zod:
         specifier: ^3.24.0
@@ -696,8 +696,8 @@ importers:
 
   packages/tools-mcp:
     dependencies:
-      '@emerge/kernel':
-        specifier: workspace:*
+      '@lwrf42/emerge-kernel':
+        specifier: workspace:^0.1.0
         version: link:../kernel
       '@modelcontextprotocol/sdk':
         specifier: ^1.29.0
@@ -709,8 +709,8 @@ importers:
 
   packages/tui:
     dependencies:
-      '@emerge/kernel':
-        specifier: workspace:*
+      '@lwrf42/emerge-kernel':
+        specifier: workspace:^0.1.0
         version: link:../kernel
       commander:
         specifier: ^12.1.0
@@ -734,8 +734,8 @@ importers:
 
   packages/workspaces-git-worktree:
     dependencies:
-      '@emerge/kernel':
-        specifier: workspace:*
+      '@lwrf42/emerge-kernel':
+        specifier: workspace:^0.1.0
         version: link:../kernel
     devDependencies:
       '@types/node':

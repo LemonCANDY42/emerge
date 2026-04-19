@@ -11,7 +11,7 @@ import type {
   ProviderCapabilities,
   StepObservation,
   StepProfile,
-} from "@emerge/kernel/contracts";
+} from "@lwrf42/emerge-kernel/contracts";
 import { describe, expect, it } from "vitest";
 import { CalibratedSurveillance } from "./index.js";
 

@@ -1,5 +1,5 @@
 /**
- * @emerge/kernel
+ * @lwrf42/emerge-kernel
  *
  * Contracts (public API) plus runtime (implementation).
  */

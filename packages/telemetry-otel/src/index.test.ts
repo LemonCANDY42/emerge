@@ -8,7 +8,7 @@
  * addEvent wiring — not OTel SDK internals.
  */
 
-import type { AgentId, SpanId } from "@emerge/kernel/contracts";
+import type { AgentId, SpanId } from "@lwrf42/emerge-kernel/contracts";
 import { SpanStatusCode } from "@opentelemetry/api";
 import {
   BasicTracerProvider,

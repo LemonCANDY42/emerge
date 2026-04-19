@@ -9,8 +9,8 @@ How to embed emerge in your TypeScript app and run agents. This is the **emerge-
 The shortest working snippet:
 
 ```typescript
-import { Kernel } from "@emerge/kernel/runtime";
-import { MockProvider } from "@emerge/provider-mock";
+import { Kernel } from "@lwrf42/emerge-kernel/runtime";
+import { MockProvider } from "@lwrf42/emerge-provider-mock";
 
 const kernel = new Kernel({ mode: "auto", reproducibility: "free" }, {});
 const provider = new MockProvider([
@@ -49,8 +49,8 @@ That's it. The agent runs, the kernel drives the loop, and the provider supplies
 Standard 5-line setup:
 
 ```typescript
-import { Kernel } from "@emerge/kernel/runtime";
-import type { SessionId } from "@emerge/kernel/contracts";
+import { Kernel } from "@lwrf42/emerge-kernel/runtime";
+import type { SessionId } from "@lwrf42/emerge-kernel/contracts";
 
 // 1. Create the kernel with config
 const kernel = new Kernel(
@@ -68,7 +68,7 @@ const kernel = new Kernel(
 );
 
 // 2. Mount a provider
-import { MockProvider } from "@emerge/provider-mock";
+import { MockProvider } from "@lwrf42/emerge-provider-mock";
 const provider = new MockProvider([...]);
 kernel.mountProvider(provider);
 
@@ -77,8 +77,8 @@ const sessionId = `my-task-${Date.now()}` as SessionId;
 kernel.setSession(sessionId, "my-contract-id");
 
 // 4. Register tools (if any)
-import { makeFsReadTool } from "@emerge/tools";
-import { InProcSandbox } from "@emerge/sandbox-inproc";
+import { makeFsReadTool } from "@lwrf42/emerge-tools";
+import { InProcSandbox } from "@lwrf42/emerge-sandbox-inproc";
 const sandbox = new InProcSandbox(...);
 kernel.getToolRegistry().register(makeFsReadTool(sandbox));
 
@@ -222,7 +222,7 @@ await kernel.runAgent(handle);
 The agent produces events on a **Bus**. Subscribe to them:
 
 ```typescript
-import type { AgentId, BusEnvelope, TopicId } from "@emerge/kernel/contracts";
+import type { AgentId, BusEnvelope, TopicId } from "@lwrf42/emerge-kernel/contracts";
 
 const bus = kernel.getBus();
 const sessionId = "my-session-id" as SessionId;
@@ -289,8 +289,8 @@ topicSub.close();
 Sessions are recorded by default (when a **Recorder** is mounted). Replay them deterministically:
 
 ```typescript
-import { makeRecorder } from "@emerge/replay";
-import type { SessionRecord } from "@emerge/kernel/contracts";
+import { makeRecorder } from "@lwrf42/emerge-replay";
+import type { SessionRecord } from "@lwrf42/emerge-kernel/contracts";
 
 // Mount the recorder when creating the kernel
 const recorder = makeRecorder();
@@ -318,7 +318,7 @@ if (recordResult.ok && recordResult.value.record) {
 **Replay a recorded session** (deterministically reproduces everything):
 
 ```typescript
-import { makeReplayer } from "@emerge/replay";
+import { makeReplayer } from "@lwrf42/emerge-replay";
 const recordedEvents = JSON.parse(fs.readFileSync("./session-abc.jsonl", "utf-8").split("\n").filter(Boolean));
 
 const replayer = makeReplayer(recordedEvents);
@@ -376,9 +376,9 @@ if (endResult.ok) {
 ### Pattern 1: Tool registration + tool sandbox
 
 ```typescript
-import { InProcSandbox } from "@emerge/sandbox-inproc";
-import { makeFsReadTool, makeFsWriteTool } from "@emerge/tools";
-import { BuiltinModeRegistry, permissionPolicyForMode } from "@emerge/modes";
+import { InProcSandbox } from "@lwrf42/emerge-sandbox-inproc";
+import { makeFsReadTool, makeFsWriteTool } from "@lwrf42/emerge-tools";
+import { BuiltinModeRegistry, permissionPolicyForMode } from "@lwrf42/emerge-modes";
 
 const modeRegistry = new BuiltinModeRegistry();
 const policy = permissionPolicyForMode(modeRegistry, "auto");
@@ -392,7 +392,7 @@ registry.register(makeFsWriteTool(sandbox, { rootPath: "/safe/dir" }));
 ### Pattern 2: Custom mode with restricted tools
 
 ```typescript
-import { BuiltinModeRegistry, permissionPolicyForMode } from "@emerge/modes";
+import { BuiltinModeRegistry, permissionPolicyForMode } from "@lwrf42/emerge-modes";
 
 const modeRegistry = new BuiltinModeRegistry();
 // Pre-defined modes: "auto" (default), "plan", "bypass", "accept-edit", "research", "read"
@@ -405,7 +405,7 @@ const kernel = new Kernel({ mode: "research", ... }, {});
 ### Pattern 3: Supervisor + workers topology
 
 ```typescript
-import { supervisorWorker } from "@emerge/agents";
+import { supervisorWorker } from "@lwrf42/emerge-agents";
 
 const topology = supervisorWorker({
   supervisor: supervisorSpec,
@@ -424,8 +424,8 @@ if (result.ok) {
 ### Pattern 4: Custodian + Adjudicator (contract enforcement)
 
 ```typescript
-import { buildCustodian, buildAdjudicator } from "@emerge/agents";
-import type { Contract } from "@emerge/kernel/contracts";
+import { buildCustodian, buildAdjudicator } from "@lwrf42/emerge-agents";
+import type { Contract } from "@lwrf42/emerge-kernel/contracts";
 
 const contract: Contract = {
   id: "essay-contract" as ContractId,
@@ -472,7 +472,7 @@ kernel.spawn(adjudicator.spec);
 ### Pattern 5: Postmortem analysis (session-over-session learning)
 
 ```typescript
-import type { Postmortem, SessionRecord, Experience, ExperienceId } from "@emerge/kernel/contracts";
+import type { Postmortem, SessionRecord, Experience, ExperienceId } from "@lwrf42/emerge-kernel/contracts";
 
 class MyPostmortem implements Postmortem {
   async analyze(record: SessionRecord): Promise<Result<readonly Experience[]>> {
@@ -537,12 +537,12 @@ import type {
   QuotaRequest, QuotaDecision,
   Contract, Experience, ExperienceId,
   Postmortem,
-} from "@emerge/kernel/contracts";
+} from "@lwrf42/emerge-kernel/contracts";
 
-import { Kernel } from "@emerge/kernel/runtime";
-import { MockProvider } from "@emerge/provider-mock";
-import { CalibratedSurveillance } from "@emerge/surveillance";
-import { buildCustodian, buildAdjudicator } from "@emerge/agents";
+import { Kernel } from "@lwrf42/emerge-kernel/runtime";
+import { MockProvider } from "@lwrf42/emerge-provider-mock";
+import { CalibratedSurveillance } from "@lwrf42/emerge-surveillance";
+import { buildCustodian, buildAdjudicator } from "@lwrf42/emerge-agents";
 ```
 
 ## What's next?

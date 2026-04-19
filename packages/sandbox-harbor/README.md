@@ -1,4 +1,4 @@
-# @emerge/sandbox-harbor
+# @lwrf42/emerge-sandbox-harbor
 
 Docker-backed `Sandbox` implementation for the emerge agent harness.
 
@@ -11,14 +11,14 @@ v0.1.0 — early. Real-model verified against `gpt-5.4` with `python:3.12-slim` 
 ## Install
 
 ```bash
-npm install @emerge/sandbox-harbor
+npm install @lwrf42/emerge-sandbox-harbor
 ```
 
 ## Usage
 
 ```ts
-import { HarborSandbox } from "@emerge/sandbox-harbor";
-import { makeBashTool, makeFsReadTool, makeFsWriteTool } from "@emerge/tools";
+import { HarborSandbox } from "@lwrf42/emerge-sandbox-harbor";
+import { makeBashTool, makeFsReadTool, makeFsWriteTool } from "@lwrf42/emerge-tools";
 
 const sandbox = new HarborSandbox({
   workspaceDir: "/path/to/workspace",
@@ -28,7 +28,7 @@ const sandbox = new HarborSandbox({
   timeoutSeconds: 30,             // per-command timeout (default: 30)
 });
 
-// Use with @emerge/tools
+// Use with @lwrf42/emerge-tools
 kernel.getToolRegistry().register(makeBashTool(sandbox));
 kernel.getToolRegistry().register(makeFsReadTool(sandbox));
 kernel.getToolRegistry().register(makeFsWriteTool(sandbox));
@@ -96,7 +96,7 @@ const argv = sandbox.buildDockerArgv("echo hello");
 Docker-requiring integration tests are gated on `process.env.HAS_DOCKER === "1"`:
 
 ```
-HAS_DOCKER=1 pnpm test --filter @emerge/sandbox-harbor
+HAS_DOCKER=1 pnpm test --filter @lwrf42/emerge-sandbox-harbor
 ```
 
 ## Requirements

@@ -1,5 +1,5 @@
 {
-  "name": "@emerge/example-dashboard-hello",
+  "name": "@lwrf42/emerge-example-dashboard-hello",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -9,10 +9,10 @@
     "clean": "rm -rf dist *.tsbuildinfo"
   },
   "dependencies": {
-    "@emerge/agents": "workspace:*",
-    "@emerge/kernel": "workspace:*",
-    "@emerge/provider-mock": "workspace:*",
-    "@emerge/replay": "workspace:*"
+    "@lwrf42/emerge-agents": "workspace:*",
+    "@lwrf42/emerge-kernel": "workspace:*",
+    "@lwrf42/emerge-provider-mock": "workspace:*",
+    "@lwrf42/emerge-replay": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^20.11.0"

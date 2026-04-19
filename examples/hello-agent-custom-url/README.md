@@ -1,7 +1,7 @@
 # hello-agent-custom-url
 
 Runs the hello-agent task (read README, summarize, write NOTES.md) against any
-OpenAI-compatible endpoint using `@emerge/provider-openai-compat`.
+OpenAI-compatible endpoint using `@lwrf42/emerge-provider-openai-compat`.
 
 ## Quick start
 

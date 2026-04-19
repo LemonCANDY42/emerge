@@ -8,9 +8,9 @@
 
 ## Problem
 
-The recorder in `@emerge/replay` wrote raw `RecordedEvent` objects to disk in
+The recorder in `@lwrf42/emerge-replay` wrote raw `RecordedEvent` objects to disk in
 two shapes: one JSON blob per session (the "fat record") appended at
-`end()`-time, and individual span lines from `@emerge/telemetry-jsonl` in an
+`end()`-time, and individual span lines from `@lwrf42/emerge-telemetry-jsonl` in an
 ad-hoc `{ type: "start" | "end" | "event", ... }` format.
 
 Neither format was a contract. As a result:

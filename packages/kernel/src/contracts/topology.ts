@@ -1,7 +1,7 @@
 /**
  * Topology — a value, not a class.
  *
- * Topology helpers in `@emerge/agents` produce `Topology` values from
+ * Topology helpers in `@lwrf42/emerge-agents` produce `Topology` values from
  * `AgentSpec[]` + a pattern descriptor. The kernel runs whatever topology
  * those helpers produce — the kernel knows nothing about "swarm" or "mesh".
  */

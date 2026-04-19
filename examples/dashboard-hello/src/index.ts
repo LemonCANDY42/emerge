@@ -21,8 +21,8 @@ import { createHash } from "node:crypto";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { buildAdjudicator, buildCustodian, supervisorWorker } from "@emerge/agents";
-import type { KernelLike } from "@emerge/agents";
+import { buildAdjudicator, buildCustodian, supervisorWorker } from "@lwrf42/emerge-agents";
+import type { KernelLike } from "@lwrf42/emerge-agents";
 import type {
   AgentId,
   ContractId,
@@ -33,10 +33,10 @@ import type {
   QuotaRequest,
   SessionId,
   Verdict,
-} from "@emerge/kernel/contracts";
-import { Kernel } from "@emerge/kernel/runtime";
-import { MockProvider } from "@emerge/provider-mock";
-import { makeRecorder } from "@emerge/replay";
+} from "@lwrf42/emerge-kernel/contracts";
+import { Kernel } from "@lwrf42/emerge-kernel/runtime";
+import { MockProvider } from "@lwrf42/emerge-provider-mock";
+import { makeRecorder } from "@lwrf42/emerge-replay";
 
 // ─── Scenario ─────────────────────────────────────────────────────────────────
 
@@ -302,7 +302,7 @@ async function main(): Promise<void> {
   console.log(`\n  node packages/dashboard/dist/server/cli.js --jsonl "${jsonlPath}"`);
   console.log("\nThen open: http://127.0.0.1:7777\n");
   console.log(
-    "(Build the dashboard first with: pnpm build && pnpm --filter @emerge/dashboard build:client)\n",
+    "(Build the dashboard first with: pnpm build && pnpm --filter @lwrf42/emerge-dashboard build:client)\n",
   );
 
   process.exit(0);

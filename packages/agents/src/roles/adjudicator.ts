@@ -23,7 +23,7 @@ import type {
   Result,
   SessionId,
   Verdict,
-} from "@emerge/kernel/contracts";
+} from "@lwrf42/emerge-kernel/contracts";
 
 export interface BuildAdjudicatorOptions {
   readonly id: AgentId;
@@ -56,7 +56,7 @@ export interface AdjudicatorBuild {
    * Call this AFTER bus is live. Returns a cleanup function.
    */
   watchBus(opts: {
-    bus: import("@emerge/kernel/contracts").Bus;
+    bus: import("@lwrf42/emerge-kernel/contracts").Bus;
     sessionId: SessionId;
   }): () => Promise<void>;
 }
@@ -137,7 +137,7 @@ export function buildAdjudicator(opts: BuildAdjudicatorOptions): AdjudicatorBuil
   }
 
   function watchBus(opts2: {
-    bus: import("@emerge/kernel/contracts").Bus;
+    bus: import("@lwrf42/emerge-kernel/contracts").Bus;
     sessionId: SessionId;
   }): () => Promise<void> {
     const { bus, sessionId } = opts2;

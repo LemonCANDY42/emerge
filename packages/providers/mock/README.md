@@ -1,4 +1,4 @@
-# @emerge/provider-mock
+# @lwrf42/emerge-provider-mock
 
 Scripted mock LLM provider for deterministic testing and demos in the emerge harness.
 
@@ -7,13 +7,13 @@ v0.1.0 — early. See main repo for verified-vs-unverified surfaces.
 ## Install
 
 ```bash
-npm install @emerge/provider-mock
+npm install @lwrf42/emerge-provider-mock
 ```
 
 ## Quick example
 
 ```ts
-import { MockProvider } from "@emerge/provider-mock";
+import { MockProvider } from "@lwrf42/emerge-provider-mock";
 
 const provider = new MockProvider([
   { role: "assistant", content: "Hello! How can I help?" },

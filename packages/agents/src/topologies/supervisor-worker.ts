@@ -25,7 +25,7 @@ import type {
   Topology,
   TopologyEdge,
   TopologyMember,
-} from "@emerge/kernel/contracts";
+} from "@lwrf42/emerge-kernel/contracts";
 
 export interface SubTask {
   readonly id: string;

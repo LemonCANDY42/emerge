@@ -78,10 +78,10 @@ type ProviderStopReason = "end_turn" | "max_tokens" | "stop_sequence" | "tool_us
 ```
 
 **Implementations:**
-- `@emerge/provider-mock`: Scripted responses, testing
-- `@emerge/provider-anthropic`: Claude (Sonnet, Opus, Haiku)
-- `@emerge/provider-openai`: GPT (Chat Completions + Responses API)
-- `@emerge/provider-openai-compat`: Any OpenAI-compatible endpoint (Ollama, vLLM, etc.)
+- `@lwrf42/emerge-provider-mock`: Scripted responses, testing
+- `@lwrf42/emerge-provider-anthropic`: Claude (Sonnet, Opus, Haiku)
+- `@lwrf42/emerge-provider-openai`: GPT (Chat Completions + Responses API)
+- `@lwrf42/emerge-provider-openai-compat`: Any OpenAI-compatible endpoint (Ollama, vLLM, etc.)
 
 ## Tool contract
 
@@ -296,7 +296,7 @@ interface StepProfile {
 }
 ```
 
-**Implementation:** `CalibratedSurveillance` in `@emerge/surveillance`.
+**Implementation:** `CalibratedSurveillance` in `@lwrf42/emerge-surveillance`.
 
 ```typescript
 const surveillance = new CalibratedSurveillance({ maxDepth: 4 });
@@ -370,7 +370,7 @@ type RecordedEvent =
 
 **Usage:**
 ```typescript
-import { makeRecorder, makeReplayer } from "@emerge/replay";
+import { makeRecorder, makeReplayer } from "@lwrf42/emerge-replay";
 
 const recorder = makeRecorder();
 kernel = new Kernel({...}, { recorder });
@@ -422,7 +422,7 @@ interface TraceContext {
 }
 ```
 
-Planned: `@emerge/telemetry-otel` (M3c2) will emit spans to Phoenix, Langfuse, or any OTel sink.
+Planned: `@lwrf42/emerge-telemetry-otel` (M3c2) will emit spans to Phoenix, Langfuse, or any OTel sink.
 
 ## Key type imports
 
@@ -459,9 +459,9 @@ import type {
   Mode, PermissionPolicy,
   Experience, ExperienceLibrary,
   SessionRecord,
-} from "@emerge/kernel/contracts";
+} from "@lwrf42/emerge-kernel/contracts";
 
-import { Kernel } from "@emerge/kernel/runtime";
+import { Kernel } from "@lwrf42/emerge-kernel/runtime";
 ```
 
 ## See also

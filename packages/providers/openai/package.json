@@ -1,5 +1,5 @@
 {
-  "name": "@emerge/provider-openai",
+  "name": "@lwrf42/emerge-provider-openai",
   "version": "0.1.0",
   "description": "OpenAI provider adapter (chat and responses protocols) for the emerge agent harness.",
   "license": "MIT",
@@ -35,7 +35,7 @@
   },
   "dependencies": {
     "openai": "^4.80.0",
-    "@emerge/kernel": "workspace:^0.1.0"
+    "@lwrf42/emerge-kernel": "workspace:^0.1.0"
   },
   "devDependencies": {
     "@types/node": "^20.11.0"

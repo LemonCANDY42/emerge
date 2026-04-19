@@ -16,7 +16,7 @@ leaves; pipelines of swarms; debates among supervisors.
 ## Decision
 
 - `Topology` is a *value* produced by helper functions in
-  `@emerge/agents`: `supervisor-worker`, `worker-pool`, `swarm`, `mesh`,
+  `@lwrf42/emerge-agents`: `supervisor-worker`, `worker-pool`, `swarm`, `mesh`,
   `tree`, `pipeline`, `debate`, plus user-defined kinds.
 - The kernel runs any topology because it only knows about `agents`,
   `bus`, and `scheduler`.
@@ -35,5 +35,5 @@ leaves; pipelines of swarms; debates among supervisors.
 ## Consequences
 
 - The kernel stays small (no topology code).
-- Helpers in `@emerge/agents` must keep up with the patterns the
+- Helpers in `@lwrf42/emerge-agents` must keep up with the patterns the
   community wants. Adding a new pattern is a non-breaking change.

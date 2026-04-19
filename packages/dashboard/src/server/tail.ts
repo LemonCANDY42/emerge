@@ -4,20 +4,20 @@
  * Functionally identical to packages/tui/src/parser.ts — the logic is
  * deliberately duplicated here rather than extracted to a shared package
  * for two reasons:
- *   1. @emerge/tui already has the right code; extracting to a third package
+ *   1. @lwrf42/emerge-tui already has the right code; extracting to a third package
  *      would add indirection before a second concrete use-case demands it
  *      (per CLAUDE.md: "add when the second concrete use-case appears").
  *   2. The server runs in Node; the client (Vite) must never import Node
  *      fs/readline APIs. Keeping this file in the server subtree enforces
  *      that boundary at the filesystem level.
  *
- * If a third consumer of this code appears, factor into a `@emerge/jsonl-util`
+ * If a third consumer of this code appears, factor into a `@lwrf42/emerge-jsonl-util`
  * package at that point.
  */
 
 import { createReadStream, stat, unwatchFile, watchFile } from "node:fs";
-import { parseJsonlLine } from "@emerge/kernel/contracts";
-import type { JsonlEvent } from "@emerge/kernel/contracts";
+import { parseJsonlLine } from "@lwrf42/emerge-kernel/contracts";
+import type { JsonlEvent } from "@lwrf42/emerge-kernel/contracts";
 
 const POLL_INTERVAL_MS = 250;
 

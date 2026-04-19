@@ -168,7 +168,7 @@ mock-driven test suite of 505 tests.
 The strongest "no" if we are NOT ready: **we still have only one
 real model tested (`gpt-5.4`) on one custom OpenAI-compatible gateway**.
 We have not exercised the harness against:
-- Anthropic (via the `@emerge/provider-anthropic` package shipped at M1)
+- Anthropic (via the `@lwrf42/emerge-provider-anthropic` package shipped at M1)
 - Direct OpenAI (`api.openai.com/v1`)
 - A locally-hosted model (Ollama, vLLM, llama.cpp)
 - A different reasoning level (only `medium` was tested in this PR)

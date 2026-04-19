@@ -18,7 +18,7 @@ bilateral peer-to-peer.
   chosen to map cleanly to A2A messages and ACP delta streams. We add
   fields when both protocols converge on them.
 - The kernel does not depend on any wire library today. A future
-  `@emerge/bus-a2a` package will adapt.
+  `@lwrf42/emerge-bus-a2a` package will adapt.
 - We treat the bus as the orchestration plane and MCP as the tool
   transport plane (separate concerns).
 

@@ -1,4 +1,4 @@
-# @emerge/tui
+# @lwrf42/emerge-tui
 
 Ink+React terminal UI monitor for emerge agent sessions: live topology, verdicts, cost, and replay scrubber.
 
@@ -7,13 +7,13 @@ v0.1.0 — early. TUI live and replay modes verified via Ink testing-library tes
 ## Install
 
 ```bash
-npm install -g @emerge/tui
+npm install -g @lwrf42/emerge-tui
 ```
 
 Or run without installing:
 
 ```bash
-npx @emerge/tui --jsonl /tmp/emerge/session.jsonl
+npx @lwrf42/emerge-tui --jsonl /tmp/emerge/session.jsonl
 ```
 
 ## Usage
@@ -39,8 +39,8 @@ emerge-tui --session my-session
 ## Programmatic API
 
 ```ts
-import { renderTui } from "@emerge/tui";
-import { TuiState } from "@emerge/tui/state";
+import { renderTui } from "@lwrf42/emerge-tui";
+import { TuiState } from "@lwrf42/emerge-tui/state";
 
 const state = new TuiState();
 const { unmount } = renderTui({ state });

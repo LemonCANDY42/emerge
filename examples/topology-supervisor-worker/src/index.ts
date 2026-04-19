@@ -34,9 +34,9 @@ import {
   buildPostmortem,
   defaultAnalyze,
   supervisorWorker,
-} from "@emerge/agents";
-import type { KernelLike } from "@emerge/agents";
-import { InMemoryExperienceLibrary } from "@emerge/experience-inmemory";
+} from "@lwrf42/emerge-agents";
+import type { KernelLike } from "@lwrf42/emerge-agents";
+import { InMemoryExperienceLibrary } from "@lwrf42/emerge-experience-inmemory";
 import type {
   AgentId,
   ContractId,
@@ -55,10 +55,10 @@ import type {
   Result,
   SessionId,
   Verdict,
-} from "@emerge/kernel/contracts";
-import { Kernel } from "@emerge/kernel/runtime";
-import { MockProvider } from "@emerge/provider-mock";
-import { makeRecorder } from "@emerge/replay";
+} from "@lwrf42/emerge-kernel/contracts";
+import { Kernel } from "@lwrf42/emerge-kernel/runtime";
+import { MockProvider } from "@lwrf42/emerge-provider-mock";
+import { makeRecorder } from "@lwrf42/emerge-replay";
 
 // ─── Inputs ───────────────────────────────────────────────────────────────
 const INPUT_A =

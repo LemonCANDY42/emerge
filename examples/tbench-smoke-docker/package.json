@@ -1,5 +1,5 @@
 {
-  "name": "@emerge/example-tbench-smoke-docker",
+  "name": "@lwrf42/emerge-example-tbench-smoke-docker",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -14,9 +14,9 @@
     "@types/node": "^20.11.0"
   },
   "dependencies": {
-    "@emerge/eval-terminal-bench": "workspace:*",
-    "@emerge/kernel": "workspace:*",
-    "@emerge/provider-mock": "workspace:*",
-    "@emerge/sandbox-harbor": "workspace:*"
+    "@lwrf42/emerge-eval-terminal-bench": "workspace:*",
+    "@lwrf42/emerge-kernel": "workspace:*",
+    "@lwrf42/emerge-provider-mock": "workspace:*",
+    "@lwrf42/emerge-sandbox-harbor": "workspace:*"
   }
 }

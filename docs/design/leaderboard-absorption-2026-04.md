@@ -49,7 +49,7 @@ Five-layer runtime ForgeCode publishes. emerge covers 4-5 partially:
 
 | ForgeCode layer | emerge equivalent | Gap |
 |---|---|---|
-| 1. Semantic entry-point discovery | `@emerge/surveillance` probes are capability-focused, not file-system semantic | medium-large |
+| 1. Semantic entry-point discovery | `@lwrf42/emerge-surveillance` probes are capability-focused, not file-system semantic | medium-large |
 | 2. Dynamic skill loading by task profile | Skills concept in roadmap, not shipped | medium (M3c2+) |
 | 3. **Pre-dispatch tool-call correction layer** | Schema validation at registration; no runtime correction | **medium** (M3c2 candidate) |
 | 4. todo_write enforcement | Custodian/Adjudicator contracts exist, kernel-level gate missing | **small** (M3c2 candidate) |
@@ -156,11 +156,11 @@ Sources: [factory.ai/news/terminal-bench](https://factory.ai/news/terminal-bench
 
 | # | Proposal | Cost | Impact | Slot |
 |---|---|---|---|---|
-| 1 | **Pre-dispatch tool-call correction layer** between model output and `@emerge/kernel` dispatch. Heuristic + lightweight static analysis: type coercion, missing optional defaults, string-escape fixes. Log unfixable; escalate. ForgeCode attributes consistent cross-model perf to this. | small-med | **high** | M3c2 |
+| 1 | **Pre-dispatch tool-call correction layer** between model output and `@lwrf42/emerge-kernel` dispatch. Heuristic + lightweight static analysis: type coercion, missing optional defaults, string-escape fixes. Log unfixable; escalate. ForgeCode attributes consistent cross-model perf to this. | small-med | **high** | M3c2 |
 | 2 | **Kernel-enforced verification gate before task exit.** Kernel refuses `task_complete` until the Adjudicator verification skill has been called in the current session. Verification prompt: "what evidence proves this objective is complete?" Elevated reasoning budget. ForgeCode's most impactful single change for GPT-class models. emerge's Adjudicator contract already accommodates this; need session-scoped boolean gate in kernel lifecycle. | small | **high** (non-Anthropic) | M3c2 |
 | 3 | **Marker-based early command completion** in sandbox. Append echo sentinel after each command; poll for it; exit wait early when seen; filter sentinel from LLM-visible output. Direct wall-clock recovery on TB 2.0 scoring. KIRA reference impl available. | small | medium | M3c2 |
 | 4 | **Progressive reasoning budget by turn count.** Provider-adapter hook: turns 1-10 high thinking, 11+ low, reset on verifier invocation. No contract change. | small | medium | M3d |
-| 5 | **Background execution primitive** in `@emerge/tools` / sandbox. Spawn detached process, get handle, continue working. Unlocks server-startup / compilation / training-monitor TB 2.0 tasks. | medium | medium | M3d |
+| 5 | **Background execution primitive** in `@lwrf42/emerge-tools` / sandbox. Spawn detached process, get handle, continue working. Unlocks server-startup / compilation / training-monitor TB 2.0 tasks. | medium | medium | M3d |
 | 6 | **Event-driven system reminders** (attention-decay injection). OpenDev-style: targeted guidance injection at decision points, not static system prompt. Triggered by turn count, tool-error spike, idle. Operationalizes surveillance into mid-task correction. | medium | medium | M4 |
 | 7 | **Hierarchical reference-node memory for tool outputs.** OpenSage-inspired: full output in reference node, summary in active context, retrieve on demand. Aligns pinned-context discipline with long-output survival. | large | high (SWE-bench Pro) | M5 |
 

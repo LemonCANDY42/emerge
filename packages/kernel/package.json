@@ -1,5 +1,5 @@
 {
-  "name": "@emerge/kernel",
+  "name": "@lwrf42/emerge-kernel",
   "version": "0.1.0",
   "description": "Contracts, scheduler, message bus, and lifecycle runtime for the emerge agent harness.",
   "license": "MIT",

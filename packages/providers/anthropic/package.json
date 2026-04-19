@@ -1,5 +1,5 @@
 {
-  "name": "@emerge/provider-anthropic",
+  "name": "@lwrf42/emerge-provider-anthropic",
   "version": "0.1.0",
   "description": "Anthropic Claude provider adapter for the emerge agent harness.",
   "license": "MIT",
@@ -35,7 +35,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",
-    "@emerge/kernel": "workspace:^0.1.0"
+    "@lwrf42/emerge-kernel": "workspace:^0.1.0"
   },
   "devDependencies": {
     "@types/node": "^20.11.0"

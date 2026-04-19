@@ -7,8 +7,8 @@
  * tests, not unit tests for individual functions.
  */
 
-import type { ProviderEvent } from "@emerge/kernel/contracts";
-import { MockProvider } from "@emerge/provider-mock";
+import type { ProviderEvent } from "@lwrf42/emerge-kernel/contracts";
+import { MockProvider } from "@lwrf42/emerge-provider-mock";
 import { describe, expect, it } from "vitest";
 import { buildSession } from "./session-builder.js";
 import type { TaskSpec } from "./task-loader.js";

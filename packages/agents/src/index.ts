@@ -1,5 +1,5 @@
 /**
- * @emerge/agents — topology builders + role helpers.
+ * @lwrf42/emerge-agents — topology builders + role helpers.
  *
  * Exports:
  *   - supervisorWorker, workerPool, pipeline (topology helpers)
@@ -28,7 +28,7 @@ export type {
  *   })
  */
 export function acceptanceCriteriaFromContract(
-  contract: import("@emerge/kernel/contracts").Contract,
+  contract: import("@lwrf42/emerge-kernel/contracts").Contract,
 ): string {
   return contract.acceptanceCriteria
     .filter(

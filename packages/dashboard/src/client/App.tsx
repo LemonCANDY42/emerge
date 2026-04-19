@@ -18,7 +18,7 @@
  * intermediate states: displayState = applyEvents(rawEvents.slice(0, cursor)).
  */
 
-import { applyEvents } from "@emerge/tui/state";
+import { applyEvents } from "@lwrf42/emerge-tui/state";
 import type React from "react";
 import { useMemo, useState } from "react";
 import { CostChart } from "./panels/CostChart.js";

@@ -33,7 +33,7 @@ import type {
   TimeWindow,
   TopologyDelta,
   TopologySnapshot,
-} from "@emerge/kernel/contracts";
+} from "@lwrf42/emerge-kernel/contracts";
 
 /**
  * M1: Recursively freeze an object so contract() always returns an immutable value.
@@ -177,7 +177,7 @@ class InProcessCustodian implements Custodian {
     const clampN = (requested: number, dim: keyof typeof spent): number =>
       clamp(requested, dim) ?? requested;
 
-    const clamped: import("@emerge/kernel/contracts").Budget = {
+    const clamped: import("@lwrf42/emerge-kernel/contracts").Budget = {
       ...(decision.granted.tokensIn !== undefined
         ? { tokensIn: clampN(decision.granted.tokensIn, "tokensIn") }
         : {}),
@@ -209,7 +209,7 @@ class InProcessCustodian implements Custodian {
     };
   }
 
-  private _accrue(from: AgentId, granted: import("@emerge/kernel/contracts").Budget): void {
+  private _accrue(from: AgentId, granted: import("@lwrf42/emerge-kernel/contracts").Budget): void {
     const key = String(from);
     const cur = this._agentGrantLedger.get(key) ?? { tokensIn: 0, tokensOut: 0, wallMs: 0, usd: 0 };
     this._agentGrantLedger.set(key, {

@@ -25,7 +25,7 @@ import type {
   ArtifactState,
   ArtifactStore,
   Result,
-} from "@emerge/kernel/contracts";
+} from "@lwrf42/emerge-kernel/contracts";
 
 interface PersistedRecord {
   readonly handle: ArtifactHandle;

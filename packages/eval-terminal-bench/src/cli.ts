@@ -21,7 +21,7 @@
  *   2  task spec validation error
  */
 
-import { MockProvider } from "@emerge/provider-mock";
+import { MockProvider } from "@lwrf42/emerge-provider-mock";
 import { runAcceptance } from "./acceptance-runner.js";
 import { makeTerminalBenchBlueprint } from "./blueprint.js";
 import type { SandboxMode } from "./session-builder.js";

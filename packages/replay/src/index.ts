@@ -1,5 +1,5 @@
 /**
- * @emerge/replay — InMemorySessionRecorder + JsonlReplayer + helpers.
+ * @lwrf42/emerge-replay — InMemorySessionRecorder + JsonlReplayer + helpers.
  *
  * M3c2 update: makeRecorder() now writes per-event JSONL lines as they arrive
  * (conforming to the JSONL schema contract, ADR 0037), PLUS a session.start
@@ -23,8 +23,12 @@ import type {
   SessionId,
   SessionRecord,
   SessionRecorder,
-} from "@emerge/kernel/contracts";
-import { fromRecordedEvent, sessionEndEvent, sessionStartEvent } from "@emerge/kernel/contracts";
+} from "@lwrf42/emerge-kernel/contracts";
+import {
+  fromRecordedEvent,
+  sessionEndEvent,
+  sessionStartEvent,
+} from "@lwrf42/emerge-kernel/contracts";
 
 export class InMemorySessionRecorder implements SessionRecorder {
   private readonly sessions = new Map<

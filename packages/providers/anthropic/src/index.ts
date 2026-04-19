@@ -13,7 +13,7 @@
 
 // M3b: export the Anthropic-tuned schema adapter so consumers can mount it in one line:
 //   kernel.mountSchemaAdapter(provider.capabilities.id, anthropicSchemaAdapter)
-export { anthropicAdapter as anthropicSchemaAdapter } from "@emerge/kernel/runtime";
+export { anthropicAdapter as anthropicSchemaAdapter } from "@lwrf42/emerge-kernel/runtime";
 
 import Anthropic from "@anthropic-ai/sdk";
 import type {
@@ -26,7 +26,7 @@ import type {
   ProviderToolSpec,
   ReproducibilityTier,
   Result,
-} from "@emerge/kernel/contracts";
+} from "@lwrf42/emerge-kernel/contracts";
 import type { RetryOptions, SleepFn } from "./retry.js";
 import { DEFAULT_RETRY_OPTIONS, defaultSleep, withRetry } from "./retry.js";
 import { buildToolNameMap } from "./sanitize.js";

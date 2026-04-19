@@ -44,7 +44,7 @@ You should see the Phoenix dashboard (empty for now).
 Install the OTel dependencies for your project:
 
 ```bash
-pnpm add @emerge/telemetry-otel @opentelemetry/api
+pnpm add @lwrf42/emerge-telemetry-otel @opentelemetry/api
 pnpm add -D @opentelemetry/sdk-node @opentelemetry/exporter-trace-otlp-http \
             @opentelemetry/resources @opentelemetry/semantic-conventions
 ```
@@ -57,8 +57,8 @@ import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-http";
 import { Resource } from "@opentelemetry/resources";
 import { ATTR_SERVICE_NAME } from "@opentelemetry/semantic-conventions";
 import { trace } from "@opentelemetry/api";
-import { OtelTelemetry } from "@emerge/telemetry-otel";
-import { Kernel } from "@emerge/kernel/runtime";
+import { OtelTelemetry } from "@lwrf42/emerge-telemetry-otel";
+import { Kernel } from "@lwrf42/emerge-kernel/runtime";
 
 // 1. Start the OTel SDK before any kernel activity
 const sdk = new NodeSDK({

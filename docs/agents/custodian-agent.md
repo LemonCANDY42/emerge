@@ -64,9 +64,9 @@ const custodianSpec: AgentSpec = {
 ## SDK integration (emerge-as-client)
 
 ```typescript
-import { buildCustodian } from "@emerge/agents";
-import { LocalFsArtifactStore } from "@emerge/artifacts-local-fs";
-import type { Contract, QuotaRequest, QuotaDecision, ContractId, AgentId } from "@emerge/kernel/contracts";
+import { buildCustodian } from "@lwrf42/emerge-agents";
+import { LocalFsArtifactStore } from "@lwrf42/emerge-artifacts-local-fs";
+import type { Contract, QuotaRequest, QuotaDecision, ContractId, AgentId } from "@lwrf42/emerge-kernel/contracts";
 
 const contract: Contract = {
   id: "refactor-contract" as ContractId,
@@ -223,7 +223,7 @@ quotaPolicy: (req: QuotaRequest): QuotaDecision => {
 ## Minimal invocation
 
 ```typescript
-import type { ContractId, AgentId } from "@emerge/kernel/contracts";
+import type { ContractId, AgentId } from "@lwrf42/emerge-kernel/contracts";
 
 const custodian = buildCustodian({
   id: "custodian" as AgentId,

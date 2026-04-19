@@ -6,8 +6,8 @@
  * @vitest-environment jsdom
  */
 
-import { EMPTY_STATE } from "@emerge/tui/state";
-import type { TuiState, VerdictEntry } from "@emerge/tui/state";
+import { EMPTY_STATE } from "@lwrf42/emerge-tui/state";
+import type { TuiState, VerdictEntry } from "@lwrf42/emerge-tui/state";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import React from "react";
 import { afterEach, describe, expect, it } from "vitest";
@@ -19,21 +19,21 @@ function makeState(verdicts: readonly VerdictEntry[]): TuiState {
 
 const ALIGNED: VerdictEntry = {
   at: 1000,
-  from: "adjudicator-1" as import("@emerge/kernel/contracts").AgentId,
+  from: "adjudicator-1" as import("@lwrf42/emerge-kernel/contracts").AgentId,
   kind: "aligned",
   rationale: "All key tokens present",
 };
 
 const FAILED: VerdictEntry = {
   at: 2000,
-  from: "adjudicator-1" as import("@emerge/kernel/contracts").AgentId,
+  from: "adjudicator-1" as import("@lwrf42/emerge-kernel/contracts").AgentId,
   kind: "failed",
   rationale: "Critical requirement missing",
 };
 
 const PARTIAL: VerdictEntry = {
   at: 3000,
-  from: "adjudicator-1" as import("@emerge/kernel/contracts").AgentId,
+  from: "adjudicator-1" as import("@lwrf42/emerge-kernel/contracts").AgentId,
   kind: "partial",
   rationale: "Some tokens missing",
 };

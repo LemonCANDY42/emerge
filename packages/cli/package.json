@@ -1,5 +1,5 @@
 {
-  "name": "@emerge/cli",
+  "name": "@lwrf42/emerge-cli",
   "version": "0.1.0",
   "description": "Command-line interface for the emerge agent harness: run, replay, probe, and status commands.",
   "license": "MIT",
@@ -37,10 +37,10 @@
     "node": ">=20"
   },
   "dependencies": {
-    "@emerge/kernel": "workspace:^0.1.0",
-    "@emerge/provider-mock": "workspace:^0.1.0",
-    "@emerge/replay": "workspace:^0.1.0",
-    "@emerge/telemetry-jsonl": "workspace:^0.1.0",
+    "@lwrf42/emerge-kernel": "workspace:^0.1.0",
+    "@lwrf42/emerge-provider-mock": "workspace:^0.1.0",
+    "@lwrf42/emerge-replay": "workspace:^0.1.0",
+    "@lwrf42/emerge-telemetry-jsonl": "workspace:^0.1.0",
     "commander": "^12.1.0",
     "yaml": "^2.6.1",
     "zod": "^3.24.2"

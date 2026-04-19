@@ -11,26 +11,28 @@
 Core packages:
 
 ```bash
-npm install @emerge/kernel
-npm install @emerge/agents
-npm install @emerge/provider-openai-compat   # for any OpenAI-compatible endpoint
-npm install @emerge/provider-openai           # for direct OpenAI API
-npm install @emerge/provider-anthropic        # for Anthropic Claude
-npm install @emerge/sandbox-inproc            # in-process sandbox (fast, no Docker)
-npm install @emerge/sandbox-harbor            # Docker sandbox (strong isolation)
-npm install @emerge/tools                     # fs + bash tools
-npm install @emerge/telemetry-jsonl           # JSONL session logging
-npm install @emerge/replay                    # session record/replay
-npm install @emerge/surveillance              # adaptive decomposition
+npm install @lwrf42/emerge-kernel
+npm install @lwrf42/emerge-agents
+npm install @lwrf42/emerge-provider-openai-compat   # for any OpenAI-compatible endpoint
+npm install @lwrf42/emerge-provider-openai           # for direct OpenAI API
+npm install @lwrf42/emerge-provider-anthropic        # for Anthropic Claude
+npm install @lwrf42/emerge-sandbox-inproc            # in-process sandbox (fast, no Docker)
+npm install @lwrf42/emerge-sandbox-harbor            # Docker sandbox (strong isolation)
+npm install @lwrf42/emerge-tools                     # fs + bash tools
+npm install @lwrf42/emerge-telemetry-jsonl           # JSONL session logging
+npm install @lwrf42/emerge-replay                    # session record/replay
+npm install @lwrf42/emerge-surveillance              # adaptive decomposition
 ```
 
 Interactive tools (install globally):
 
 ```bash
-npm install -g @emerge/cli           # emerge run/replay/probe/status
-npm install -g @emerge/tui           # emerge-tui live terminal monitor
-npm install -g @emerge/dashboard     # emerge-dashboard browser monitor
+npm install -g @lwrf42/emerge-cli @lwrf42/emerge-tui @lwrf42/emerge-dashboard
 ```
+
+## Note on naming
+
+v0.1.0 publishes under `@lwrf42/emerge-*` (the maintainer's personal npm scope) because the `@emerge` org is not yet registered. The package contents and import shape (modulo the scope prefix) match what `@emerge/*` would be once that org is claimed.
 
 `emerge` is a TypeScript harness for building durable, model-aware AI agents.
 Where most harnesses assume one model, one agent, one shot, `emerge` treats
@@ -137,30 +139,30 @@ EMERGE_LLM_BASE_URL=http://localhost:11434/v1 EMERGE_LLM_MODEL=llama3.2 \
 
 | Module | Purpose | State |
 |---|---|---|
-| `@emerge/kernel` | Contracts, scheduler, message bus, lifecycle, guards; inbox unification (A); Postmortem auto-invoke (C) | shipped (M0–M3c1) |
-| `@emerge/providers/mock` | Scripted mock provider for testing/demos | shipped (M1) |
-| `@emerge/providers/anthropic` | Anthropic Claude adapter; `baseURL` + `extraHeaders` (D3) | shipped (M1, M3c1) |
-| `@emerge/providers/openai` | OpenAI adapter; chat + responses protocols; custom `baseURL` (D1) | shipped (M3c1) |
-| `@emerge/providers/openai-compat` | Thin wrapper for any OpenAI-compatible service (D2) | shipped (M3c1) |
-| `@emerge/agents` | Topology helpers (supervisor/pool/pipeline); LLM aggregation in supervisorWorker (B) | shipped (M3a, M3c1) |
+| `@lwrf42/emerge-kernel` | Contracts, scheduler, message bus, lifecycle, guards; inbox unification (A); Postmortem auto-invoke (C) | shipped (M0–M3c1) |
+| `@lwrf42/emerge-providers/mock` | Scripted mock provider for testing/demos | shipped (M1) |
+| `@lwrf42/emerge-providers/anthropic` | Anthropic Claude adapter; `baseURL` + `extraHeaders` (D3) | shipped (M1, M3c1) |
+| `@lwrf42/emerge-providers/openai` | OpenAI adapter; chat + responses protocols; custom `baseURL` (D1) | shipped (M3c1) |
+| `@lwrf42/emerge-providers/openai-compat` | Thin wrapper for any OpenAI-compatible service (D2) | shipped (M3c1) |
+| `@lwrf42/emerge-agents` | Topology helpers (supervisor/pool/pipeline); LLM aggregation in supervisorWorker (B) | shipped (M3a, M3c1) |
 | **AI-readable docs** | AGENTS.md, docs/agents/*, docs/usage.md, docs/api.md, docs/install.md | shipped (M3c2a) |
-| `@emerge/artifacts-local-fs` | Local-filesystem artifact store | shipped (M3a) |
-| `@emerge/workspaces-git-worktree` | Git worktree + scoped-tmpdir workspace managers | shipped (M3a) |
-| `@emerge/memory/*` | Episodic + semantic + working + pinned; associative recall | planned (M5) |
-| `@emerge/tools` | Tool registry, MCP integration | shipped (M1) |
-| `@emerge/surveillance` | Capability probing, adaptive decomposition | shipped (M2) |
-| `@emerge/sandbox-inproc` | In-process sandbox with permission policy | shipped (M1) |
-| `@emerge/telemetry-jsonl` | JSONL-backed telemetry | shipped (M1) |
-| `@emerge/persistence/*` | Durable task graphs, checkpoints, resume | planned (M4) |
-| `@emerge/modes` | Built-in mode definitions + ModeRegistry impl | shipped (M1) |
-| `@emerge/replay` | Session recorder + replayer | shipped (M1) |
-| `@emerge/experience/*` | Postmortem + experience library + bundles | in-kernel contracts (M3c1); in-memory backend shipped (M3c2.5); SQLite backend planned (M5) |
-| `@emerge/cli` | `emerge run/replay/probe/status` + JSONL schema + OTel emission | planned (M3c2) |
-| `@emerge/telemetry-otel` | OpenTelemetry exporter — Phoenix / Langfuse / any OTel sink | planned (M3c2) |
-| `@emerge/experience-inmemory` | In-memory `ExperienceLibrary` + surveillance `experienceHints` wired end-to-end | shipped (M3c2.5) |
-| `@emerge/tui` | Ink+React live monitor: topology / verdicts / cost / replay scrubber | planned (M3d) |
-| `@emerge/dashboard` | Vite+React+WebSocket web monitor: topology graph / verdict feed / replay | planned (M3d) |
-| `@emerge/eval-terminal-bench` + `@emerge/sandbox-harbor` + `TerminalBenchBlueprint` | Task loader, session builder, blueprint, CLI, Docker sandbox — local smoke tests PASS | shipped (M4-prep) |
+| `@lwrf42/emerge-artifacts-local-fs` | Local-filesystem artifact store | shipped (M3a) |
+| `@lwrf42/emerge-workspaces-git-worktree` | Git worktree + scoped-tmpdir workspace managers | shipped (M3a) |
+| `@lwrf42/emerge-memory/*` | Episodic + semantic + working + pinned; associative recall | planned (M5) |
+| `@lwrf42/emerge-tools` | Tool registry, MCP integration | shipped (M1) |
+| `@lwrf42/emerge-surveillance` | Capability probing, adaptive decomposition | shipped (M2) |
+| `@lwrf42/emerge-sandbox-inproc` | In-process sandbox with permission policy | shipped (M1) |
+| `@lwrf42/emerge-telemetry-jsonl` | JSONL-backed telemetry | shipped (M1) |
+| `@lwrf42/emerge-persistence/*` | Durable task graphs, checkpoints, resume | planned (M4) |
+| `@lwrf42/emerge-modes` | Built-in mode definitions + ModeRegistry impl | shipped (M1) |
+| `@lwrf42/emerge-replay` | Session recorder + replayer | shipped (M1) |
+| `@lwrf42/emerge-experience/*` | Postmortem + experience library + bundles | in-kernel contracts (M3c1); in-memory backend shipped (M3c2.5); SQLite backend planned (M5) |
+| `@lwrf42/emerge-cli` | `emerge run/replay/probe/status` + JSONL schema + OTel emission | planned (M3c2) |
+| `@lwrf42/emerge-telemetry-otel` | OpenTelemetry exporter — Phoenix / Langfuse / any OTel sink | planned (M3c2) |
+| `@lwrf42/emerge-experience-inmemory` | In-memory `ExperienceLibrary` + surveillance `experienceHints` wired end-to-end | shipped (M3c2.5) |
+| `@lwrf42/emerge-tui` | Ink+React live monitor: topology / verdicts / cost / replay scrubber | planned (M3d) |
+| `@lwrf42/emerge-dashboard` | Vite+React+WebSocket web monitor: topology graph / verdict feed / replay | planned (M3d) |
+| `@lwrf42/emerge-eval-terminal-bench` + `@lwrf42/emerge-sandbox-harbor` + `TerminalBenchBlueprint` | Task loader, session builder, blueprint, CLI, Docker sandbox — local smoke tests PASS | shipped (M4-prep) |
 
 > **M3c1 note:** Inbox unification (AgentRunner consumes `request` envelopes addressed to it), supervisor LLM aggregation in `supervisorWorker`, `Kernel.mountPostmortem()` + auto-invoke in `endSession()`, OpenAI/OpenAI-compat providers, and three real-model demos shipped in this milestone.
 >

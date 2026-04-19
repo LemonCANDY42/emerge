@@ -5,7 +5,7 @@
  * ACL tightening applied; result aggregation.
  */
 
-import type { AgentId, AgentSpec, ToolName } from "@emerge/kernel/contracts";
+import type { AgentId, AgentSpec, ToolName } from "@lwrf42/emerge-kernel/contracts";
 import { describe, expect, it } from "vitest";
 import { supervisorWorker } from "./supervisor-worker.js";
 

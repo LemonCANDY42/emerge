@@ -5,8 +5,8 @@
  * to fail without touching the tests themselves.
  */
 
-import type { AgentId, ContractId, SessionId } from "@emerge/kernel/contracts";
-import { JSONL_SCHEMA_VERSION, type JsonlEvent } from "@emerge/kernel/contracts";
+import type { AgentId, ContractId, SessionId } from "@lwrf42/emerge-kernel/contracts";
+import { JSONL_SCHEMA_VERSION, type JsonlEvent } from "@lwrf42/emerge-kernel/contracts";
 import { describe, expect, it } from "vitest";
 import { applyEvent, applyEvents } from "./reducer.js";
 import { EMPTY_STATE } from "./types.js";
@@ -26,7 +26,7 @@ function makeHandshake(id: AgentId, spawnedBy?: AgentId, role = "worker"): Jsonl
     at: Date.now(),
     envelope: {
       kind: "handshake",
-      correlationId: `corr-${id}` as import("@emerge/kernel/contracts").CorrelationId,
+      correlationId: `corr-${id}` as import("@lwrf42/emerge-kernel/contracts").CorrelationId,
       sessionId: SESSION_ID,
       from: id,
       to: { kind: "broadcast" },
@@ -44,8 +44,8 @@ function makeHandshake(id: AgentId, spawnedBy?: AgentId, role = "worker"): Jsonl
           maxConcurrency: 1,
         },
         io: {
-          accepts: "any" as unknown as import("@emerge/kernel/contracts").SchemaRef,
-          produces: "any" as unknown as import("@emerge/kernel/contracts").SchemaRef,
+          accepts: "any" as unknown as import("@lwrf42/emerge-kernel/contracts").SchemaRef,
+          produces: "any" as unknown as import("@lwrf42/emerge-kernel/contracts").SchemaRef,
         },
         budget: { tokensIn: 1000, tokensOut: 500, usd: 1.0 },
         termination: {
@@ -67,13 +67,13 @@ function makeHandshake(id: AgentId, spawnedBy?: AgentId, role = "worker"): Jsonl
           depth: spawnedBy !== undefined ? 1 : 0,
         },
       },
-    } as import("@emerge/kernel/contracts").BusEnvelope,
+    } as import("@lwrf42/emerge-kernel/contracts").BusEnvelope,
   };
 }
 
 function makeLifecycle(
   agent: AgentId,
-  transition: import("@emerge/kernel/contracts").AgentState = "thinking",
+  transition: import("@lwrf42/emerge-kernel/contracts").AgentState = "thinking",
 ): JsonlEvent {
   return {
     v: JSONL_SCHEMA_VERSION,
@@ -103,13 +103,13 @@ function makeVerdict(
     at: 1_700_000_000_000,
     envelope: {
       kind: "verdict",
-      correlationId: "corr-verdict" as import("@emerge/kernel/contracts").CorrelationId,
+      correlationId: "corr-verdict" as import("@lwrf42/emerge-kernel/contracts").CorrelationId,
       sessionId: SESSION_ID,
       from,
       to: { kind: "broadcast" },
       timestamp: Date.now(),
       verdict,
-    } as import("@emerge/kernel/contracts").BusEnvelope,
+    } as import("@lwrf42/emerge-kernel/contracts").BusEnvelope,
   };
 }
 
@@ -120,7 +120,7 @@ function makeProviderCall(tokensIn: number, tokensOut: number, usd: number): Jso
     at: Date.now(),
     req: {
       messages: [],
-    } as unknown as import("@emerge/kernel/contracts").ProviderRequest,
+    } as unknown as import("@lwrf42/emerge-kernel/contracts").ProviderRequest,
     events: [
       {
         type: "stop",

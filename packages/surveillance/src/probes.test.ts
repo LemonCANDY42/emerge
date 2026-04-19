@@ -17,7 +17,7 @@ import type {
   ProviderCapabilities,
   ProviderEvent,
   ProviderRequest,
-} from "@emerge/kernel/contracts";
+} from "@lwrf42/emerge-kernel/contracts";
 import { describe, expect, it, vi } from "vitest";
 import { CalibratedSurveillance, DEFAULT_PROBES, type Probe } from "./index.js";
 

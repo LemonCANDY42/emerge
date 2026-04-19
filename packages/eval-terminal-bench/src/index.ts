@@ -1,5 +1,5 @@
 /**
- * @emerge/eval-terminal-bench — Terminal-Bench task runner for emerge.
+ * @lwrf42/emerge-eval-terminal-bench — Terminal-Bench task runner for emerge.
  *
  * Loads a Terminal-Bench task spec (YAML/JSON), wires an emerge session
  * to solve it, runs acceptance tests, and emits a verdict + SessionRecord.

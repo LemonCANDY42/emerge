@@ -1,4 +1,4 @@
-# @emerge/provider-openai-compat
+# @lwrf42/emerge-provider-openai-compat
 
 OpenAI-compatible provider adapter for Ollama, vLLM, llama.cpp, LM Studio, OpenRouter, and any service that speaks the OpenAI chat API.
 
@@ -7,13 +7,13 @@ v0.1.0 — early. Real-model verified against `gpt-5.4` via custom gateway. Olla
 ## Install
 
 ```bash
-npm install @emerge/provider-openai-compat
+npm install @lwrf42/emerge-provider-openai-compat
 ```
 
 ## Quick example
 
 ```ts
-import { OpenAICompatProvider } from "@emerge/provider-openai-compat";
+import { OpenAICompatProvider } from "@lwrf42/emerge-provider-openai-compat";
 
 // Ollama running locally
 const provider = new OpenAICompatProvider({

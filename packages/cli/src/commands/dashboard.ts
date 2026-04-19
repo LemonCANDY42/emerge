@@ -2,7 +2,7 @@
  * emerge dashboard — passthrough subcommand.
  *
  * Shells out to `emerge-dashboard` binary rather than duplicating the full
- * server startup logic. This keeps @emerge/cli free of Node HTTP / ws deps.
+ * server startup logic. This keeps @lwrf42/emerge-cli free of Node HTTP / ws deps.
  *
  * Usage:
  *   emerge dashboard --session <path>     replay mode
@@ -11,7 +11,7 @@
  *   emerge dashboard --listen 0.0.0.0     network-exposed (with warning)
  *
  * The emerge-dashboard binary is expected at the same node_modules/.bin/
- * path that pnpm wires when @emerge/dashboard is installed. In the monorepo
+ * path that pnpm wires when @lwrf42/emerge-dashboard is installed. In the monorepo
  * it is resolved via workspace links.
  *
  * See docs/cli/dashboard.md for the full documentation.
@@ -35,9 +35,11 @@ export async function dashboardCommand(options: DashboardOptions): Promise<void>
   // then fall back to node_modules/.bin/emerge-dashboard for installed setups.
   let dashboardBin: string;
   try {
-    // In monorepo: resolve via package.json#exports of @emerge/dashboard
-    const pkgPath = require.resolve("@emerge/dashboard/package.json");
-    const pkg = require("@emerge/dashboard/package.json") as { bin?: Record<string, string> };
+    // In monorepo: resolve via package.json#exports of @lwrf42/emerge-dashboard
+    const pkgPath = require.resolve("@lwrf42/emerge-dashboard/package.json");
+    const pkg = require("@lwrf42/emerge-dashboard/package.json") as {
+      bin?: Record<string, string>;
+    };
     const relBin = pkg.bin?.["emerge-dashboard"];
     if (!relBin) throw new Error("No emerge-dashboard bin entry");
     dashboardBin = join(pkgPath, "..", relBin);
@@ -80,7 +82,7 @@ export async function dashboardCommand(options: DashboardOptions): Promise<void>
 
   child.on("error", (err) => {
     process.stderr.write(
-      `[emerge dashboard] Failed to start emerge-dashboard: ${String(err)}\n  Make sure @emerge/dashboard is built: pnpm --filter @emerge/dashboard build\n`,
+      `[emerge dashboard] Failed to start emerge-dashboard: ${String(err)}\n  Make sure @lwrf42/emerge-dashboard is built: pnpm --filter @lwrf42/emerge-dashboard build\n`,
     );
     process.exit(1);
   });

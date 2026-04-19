@@ -27,7 +27,7 @@ import type {
   Result,
   SessionId,
   Verdict,
-} from "@emerge/kernel/contracts";
+} from "@lwrf42/emerge-kernel/contracts";
 
 /**
  * Payload expected inside the `request` envelope sent by the agent runner.
@@ -70,7 +70,7 @@ export interface VerifierAgentBuild {
    * Call this AFTER the bus is live. Returns a cleanup function.
    */
   watchBus(opts: {
-    bus: import("@emerge/kernel/contracts").Bus;
+    bus: import("@lwrf42/emerge-kernel/contracts").Bus;
     sessionId: SessionId;
   }): () => void;
   /**
@@ -131,7 +131,7 @@ export function makeVerifierAgent(opts: MakeVerifierAgentOptions): VerifierAgent
   }
 
   function watchBus(opts2: {
-    bus: import("@emerge/kernel/contracts").Bus;
+    bus: import("@lwrf42/emerge-kernel/contracts").Bus;
     sessionId: SessionId;
   }): () => void {
     const { bus, sessionId } = opts2;

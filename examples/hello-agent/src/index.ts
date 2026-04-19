@@ -12,14 +12,14 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import type { AgentId, ProviderEvent, SessionId } from "@emerge/kernel/contracts";
-import { Kernel, anthropicAdapter } from "@emerge/kernel/runtime";
-import { BuiltinModeRegistry, permissionPolicyForMode } from "@emerge/modes";
-import { MockProvider } from "@emerge/provider-mock";
-import { makeRecorder } from "@emerge/replay";
-import { InProcSandbox } from "@emerge/sandbox-inproc";
-import { JsonlTelemetry } from "@emerge/telemetry-jsonl";
-import { makeFsReadTool, makeFsWriteTool } from "@emerge/tools";
+import type { AgentId, ProviderEvent, SessionId } from "@lwrf42/emerge-kernel/contracts";
+import { Kernel, anthropicAdapter } from "@lwrf42/emerge-kernel/runtime";
+import { BuiltinModeRegistry, permissionPolicyForMode } from "@lwrf42/emerge-modes";
+import { MockProvider } from "@lwrf42/emerge-provider-mock";
+import { makeRecorder } from "@lwrf42/emerge-replay";
+import { InProcSandbox } from "@lwrf42/emerge-sandbox-inproc";
+import { JsonlTelemetry } from "@lwrf42/emerge-telemetry-jsonl";
+import { makeFsReadTool, makeFsWriteTool } from "@lwrf42/emerge-tools";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -227,7 +227,7 @@ async function main() {
   console.log("\n--- Task complete ---");
   console.log("To use Anthropic instead of mock:");
   console.log("  1. Set ANTHROPIC_API_KEY=your-key");
-  console.log("  2. Import AnthropicProvider from @emerge/provider-anthropic");
+  console.log("  2. Import AnthropicProvider from @lwrf42/emerge-provider-anthropic");
   console.log("  3. Replace MockProvider with new AnthropicProvider()");
   console.log("  4. Mount it via kernel.mountProvider(provider)");
 }

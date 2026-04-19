@@ -1,5 +1,5 @@
 {
-  "name": "@emerge/telemetry-otel",
+  "name": "@lwrf42/emerge-telemetry-otel",
   "version": "0.1.0",
   "description": "OpenTelemetry exporter for the emerge agent harness — Phoenix, Langfuse, or any OTel-compatible sink.",
   "license": "MIT",
@@ -37,7 +37,7 @@
     "@opentelemetry/api": ">=1.6.0"
   },
   "dependencies": {
-    "@emerge/kernel": "workspace:^0.1.0"
+    "@lwrf42/emerge-kernel": "workspace:^0.1.0"
   },
   "devDependencies": {
     "@opentelemetry/api": "^1.9.0",

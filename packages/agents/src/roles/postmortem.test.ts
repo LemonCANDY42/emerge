@@ -18,7 +18,7 @@ import type {
   RecordedEvent,
   SessionId,
   SessionRecord,
-} from "@emerge/kernel/contracts";
+} from "@lwrf42/emerge-kernel/contracts";
 import { describe, expect, it } from "vitest";
 import { computeApproachFingerprint, defaultAnalyze } from "./postmortem.js";
 
@@ -57,7 +57,7 @@ function toolCallEvent(toolName: string): RecordedEvent {
     kind: "tool_call",
     at: Date.now(),
     call: {
-      toolCallId: `tc-${toolName}` as import("@emerge/kernel/contracts").ToolCallId,
+      toolCallId: `tc-${toolName}` as import("@lwrf42/emerge-kernel/contracts").ToolCallId,
       callerAgent: agentId("test-agent"),
       name: toolName,
       input: {},

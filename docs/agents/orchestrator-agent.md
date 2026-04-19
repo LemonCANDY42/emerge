@@ -123,7 +123,7 @@ const workerSpec: AgentSpec = {
 ## SDK integration (emerge-as-client)
 
 ```typescript
-import { supervisorWorker } from "@emerge/agents";
+import { supervisorWorker } from "@lwrf42/emerge-agents";
 
 async function runOrchestratedTask(goal: string) {
   const runtimeKernel = new Kernel({ mode: "auto", reproducibility: "free" }, {});

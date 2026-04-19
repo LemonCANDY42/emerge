@@ -7,8 +7,8 @@
  * @vitest-environment jsdom
  */
 
-import { JSONL_SCHEMA_VERSION } from "@emerge/kernel/contracts";
-import type { JsonlEvent } from "@emerge/kernel/contracts";
+import { JSONL_SCHEMA_VERSION } from "@lwrf42/emerge-kernel/contracts";
+import type { JsonlEvent } from "@lwrf42/emerge-kernel/contracts";
 import { act, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -63,8 +63,8 @@ function makeLifecycle(at: number): JsonlEvent {
     v: JSONL_SCHEMA_VERSION,
     type: "lifecycle",
     at,
-    agent: "agent-a" as import("@emerge/kernel/contracts").AgentId,
-    transition: "thinking" as import("@emerge/kernel/contracts").AgentState,
+    agent: "agent-a" as import("@lwrf42/emerge-kernel/contracts").AgentId,
+    transition: "thinking" as import("@lwrf42/emerge-kernel/contracts").AgentState,
   };
 }
 
@@ -73,8 +73,8 @@ function makeSessionStart(at: number): JsonlEvent {
     v: JSONL_SCHEMA_VERSION,
     type: "session.start",
     at,
-    sessionId: "sess-1" as import("@emerge/kernel/contracts").SessionId,
-    contractRef: "contract-1" as import("@emerge/kernel/contracts").ContractId,
+    sessionId: "sess-1" as import("@lwrf42/emerge-kernel/contracts").SessionId,
+    contractRef: "contract-1" as import("@lwrf42/emerge-kernel/contracts").ContractId,
   };
 }
 
@@ -251,7 +251,7 @@ describe("useEventStream", () => {
   it("moving cursor changes which events are reflected in panels (replay scrubber)", async () => {
     // This is the core replay scrubber regression: slicing rawEvents at cursor
     // and calling applyEvents must produce different states at different cursor positions.
-    const { applyEvents } = await import("@emerge/tui/state");
+    const { applyEvents } = await import("@lwrf42/emerge-tui/state");
     const { useEventStream } = await import("./useEventStream.js");
     const { result } = renderHook(() =>
       useEventStream({ wsUrl: "ws://localhost:7777", accumulateRaw: true }),
@@ -278,6 +278,8 @@ describe("useEventStream", () => {
     // Cursor at 2 — all events applied, agent-a visible
     const stateAt2 = applyEvents(rawEvents.slice(0, 2));
     expect(stateAt2.agents.size).toBe(1);
-    expect(stateAt2.agents.has("agent-a" as import("@emerge/kernel/contracts").AgentId)).toBe(true);
+    expect(
+      stateAt2.agents.has("agent-a" as import("@lwrf42/emerge-kernel/contracts").AgentId),
+    ).toBe(true);
   });
 });

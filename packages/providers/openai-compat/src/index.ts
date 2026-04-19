@@ -31,18 +31,26 @@
  *   })
  */
 
-export { openaiSchemaAdapter } from "@emerge/provider-openai";
-export { OpenAIProvider } from "@emerge/provider-openai";
+export { openaiSchemaAdapter } from "@lwrf42/emerge-provider-openai";
+export { OpenAIProvider } from "@lwrf42/emerge-provider-openai";
 export type {
   OpenAIProviderConfig,
   OpenAIProtocol,
   OpenAIReasoningConfig,
   RetryOptions,
-} from "@emerge/provider-openai";
+} from "@lwrf42/emerge-provider-openai";
 
-import type { ClaimedCapabilities, Provider, ProviderCapabilities } from "@emerge/kernel/contracts";
-import { OpenAIProvider } from "@emerge/provider-openai";
-import type { OpenAIProtocol, OpenAIReasoningConfig, RetryOptions } from "@emerge/provider-openai";
+import type {
+  ClaimedCapabilities,
+  Provider,
+  ProviderCapabilities,
+} from "@lwrf42/emerge-kernel/contracts";
+import { OpenAIProvider } from "@lwrf42/emerge-provider-openai";
+import type {
+  OpenAIProtocol,
+  OpenAIReasoningConfig,
+  RetryOptions,
+} from "@lwrf42/emerge-provider-openai";
 
 export interface OpenAICompatConfig {
   /**
@@ -160,14 +168,14 @@ export class OpenAICompatProvider implements Provider {
   }
 
   invoke(
-    req: import("@emerge/kernel/contracts").ProviderRequest,
-  ): AsyncIterable<import("@emerge/kernel/contracts").ProviderEvent> {
+    req: import("@lwrf42/emerge-kernel/contracts").ProviderRequest,
+  ): AsyncIterable<import("@lwrf42/emerge-kernel/contracts").ProviderEvent> {
     return this.inner.invoke(req);
   }
 
   countTokens(
-    messages: readonly import("@emerge/kernel/contracts").ProviderMessage[],
-  ): Promise<import("@emerge/kernel/contracts").Result<number>> {
+    messages: readonly import("@lwrf42/emerge-kernel/contracts").ProviderMessage[],
+  ): Promise<import("@lwrf42/emerge-kernel/contracts").Result<number>> {
     return this.inner.countTokens(messages);
   }
 }

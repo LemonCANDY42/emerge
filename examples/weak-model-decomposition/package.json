@@ -1,5 +1,5 @@
 {
-  "name": "@emerge/example-weak-model-decomposition",
+  "name": "@lwrf42/emerge-example-weak-model-decomposition",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -14,9 +14,9 @@
     "@types/node": "^20.11.0"
   },
   "dependencies": {
-    "@emerge/kernel": "workspace:*",
-    "@emerge/provider-mock": "workspace:*",
-    "@emerge/surveillance": "workspace:*",
-    "@emerge/modes": "workspace:*"
+    "@lwrf42/emerge-kernel": "workspace:*",
+    "@lwrf42/emerge-provider-mock": "workspace:*",
+    "@lwrf42/emerge-surveillance": "workspace:*",
+    "@lwrf42/emerge-modes": "workspace:*"
   }
 }

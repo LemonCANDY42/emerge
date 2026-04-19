@@ -15,10 +15,10 @@
  * See docs/integrations/phoenix.md and docs/integrations/langfuse.md.
  */
 
-import type { AgentId, ProviderEvent, SessionId } from "@emerge/kernel/contracts";
-import { Kernel } from "@emerge/kernel/runtime";
-import { MockProvider } from "@emerge/provider-mock";
-import { OtelTelemetry } from "@emerge/telemetry-otel";
+import type { AgentId, ProviderEvent, SessionId } from "@lwrf42/emerge-kernel/contracts";
+import { Kernel } from "@lwrf42/emerge-kernel/runtime";
+import { MockProvider } from "@lwrf42/emerge-provider-mock";
+import { OtelTelemetry } from "@lwrf42/emerge-telemetry-otel";
 
 // biome-ignore lint/complexity/useLiteralKeys: env var names contain underscores, bracket notation is clearer
 const endpoint = process.env["OTEL_EXPORTER_OTLP_ENDPOINT"];

@@ -33,7 +33,7 @@ loop was not closed end-to-end:
 
 ## Decisions
 
-### 1. Ship `@emerge/experience-inmemory` as the M3c2.5 loop-proving backend
+### 1. Ship `@lwrf42/emerge-experience-inmemory` as the M3c2.5 loop-proving backend
 
 An in-memory `InMemoryExperienceLibrary` that implements all five methods
 (`hint / ingest / export / importBundle / get`) with:
@@ -212,7 +212,7 @@ a benchmark demonstrates a better ratio).
 ## Implementation notes
 
 - `packages/experience-inmemory/src/index.ts` — `InMemoryExperienceLibrary`;
-  exported from `@emerge/experience-inmemory`.
+  exported from `@lwrf42/emerge-experience-inmemory`.
 - `packages/agents/src/roles/postmortem.ts` — `computeApproachFingerprint`,
   `defaultAnalyze`, `deriveTaskType` (now contractRef-first).
 - `packages/kernel/src/runtime/agent-runner.ts` — hint fetch hoisted before the

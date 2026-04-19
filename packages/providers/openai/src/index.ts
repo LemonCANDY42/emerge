@@ -35,7 +35,7 @@
 
 // Re-export the OpenAI-tuned schema adapter so consumers can mount it in one line:
 //   kernel.mountSchemaAdapter(provider.capabilities.id, openaiSchemaAdapter)
-export { openaiAdapter as openaiSchemaAdapter } from "@emerge/kernel/runtime";
+export { openaiAdapter as openaiSchemaAdapter } from "@lwrf42/emerge-kernel/runtime";
 
 import type {
   Provider,
@@ -46,7 +46,7 @@ import type {
   ProviderStopReason,
   ProviderToolSpec,
   Result,
-} from "@emerge/kernel/contracts";
+} from "@lwrf42/emerge-kernel/contracts";
 import OpenAI from "openai";
 import type { RetryOptions, SleepFn } from "./retry.js";
 import { DEFAULT_RETRY_OPTIONS, defaultSleep, withRetry } from "./retry.js";

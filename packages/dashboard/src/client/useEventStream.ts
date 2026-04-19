@@ -2,7 +2,7 @@
  * useEventStream — React hook for the WebSocket event stream.
  *
  * Connects to the dashboard server, dispatches incoming WS frames through
- * the shared TUI reducer (imported from @emerge/tui/state), and exposes the
+ * the shared TUI reducer (imported from @lwrf42/emerge-tui/state), and exposes the
  * derived state.
  *
  * WS frame types handled:
@@ -21,9 +21,9 @@
  * reconstruct intermediate states by calling applyEvents(rawEvents.slice(0, cursor)).
  */
 
-import type { JsonlEvent } from "@emerge/kernel/contracts";
-import { EMPTY_STATE, applyEvent, applyEvents } from "@emerge/tui/state";
-import type { TuiState } from "@emerge/tui/state";
+import type { JsonlEvent } from "@lwrf42/emerge-kernel/contracts";
+import { EMPTY_STATE, applyEvent, applyEvents } from "@lwrf42/emerge-tui/state";
+import type { TuiState } from "@lwrf42/emerge-tui/state";
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 
 export type ConnectionStatus = "connecting" | "live" | "disconnected";

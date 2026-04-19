@@ -17,7 +17,7 @@ import type {
   Topology,
   TopologyEdge,
   TopologyMember,
-} from "@emerge/kernel/contracts";
+} from "@lwrf42/emerge-kernel/contracts";
 import type { KernelLike } from "./supervisor-worker.js";
 
 export interface PipelineConfig {

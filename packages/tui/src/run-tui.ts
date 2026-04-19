@@ -22,11 +22,11 @@
  * When only a bus is available (no recorder), we emit a warning.
  *
  * In practice, callers should pass a recorder created via makeRecorder()
- * from @emerge/replay so events flow through to the TUI.
+ * from @lwrf42/emerge-replay so events flow through to the TUI.
  */
 
-import type { JsonlEvent } from "@emerge/kernel/contracts";
-import type { Bus } from "@emerge/kernel/contracts";
+import type { JsonlEvent } from "@lwrf42/emerge-kernel/contracts";
+import type { Bus } from "@lwrf42/emerge-kernel/contracts";
 import { render } from "ink";
 import React from "react";
 import { LiveApp } from "./components/LiveApp.js";

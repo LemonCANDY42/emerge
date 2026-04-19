@@ -1,5 +1,5 @@
 {
-  "name": "@emerge/sandbox-harbor",
+  "name": "@lwrf42/emerge-sandbox-harbor",
   "version": "0.1.0",
   "description": "Docker-container sandbox (HarborSandbox) providing strong isolation for the emerge agent harness.",
   "license": "MIT",
@@ -34,7 +34,7 @@
     "node": ">=20"
   },
   "dependencies": {
-    "@emerge/kernel": "workspace:^0.1.0"
+    "@lwrf42/emerge-kernel": "workspace:^0.1.0"
   },
   "devDependencies": {
     "@types/node": "^20.11.0"

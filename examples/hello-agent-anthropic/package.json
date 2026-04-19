@@ -1,5 +1,5 @@
 {
-  "name": "@emerge/example-hello-agent-anthropic",
+  "name": "@lwrf42/emerge-example-hello-agent-anthropic",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -14,11 +14,11 @@
     "@types/node": "^20.11.0"
   },
   "dependencies": {
-    "@emerge/kernel": "workspace:*",
-    "@emerge/provider-anthropic": "workspace:*",
-    "@emerge/sandbox-inproc": "workspace:*",
-    "@emerge/tools": "workspace:*",
-    "@emerge/modes": "workspace:*",
-    "@emerge/replay": "workspace:*"
+    "@lwrf42/emerge-kernel": "workspace:*",
+    "@lwrf42/emerge-provider-anthropic": "workspace:*",
+    "@lwrf42/emerge-sandbox-inproc": "workspace:*",
+    "@lwrf42/emerge-tools": "workspace:*",
+    "@lwrf42/emerge-modes": "workspace:*",
+    "@lwrf42/emerge-replay": "workspace:*"
   }
 }
