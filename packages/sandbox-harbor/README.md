@@ -6,12 +6,12 @@ Docker-backed `Sandbox` implementation for the emerge agent harness.
 containers while handling `fs_read` and `fs_write` effects on the host filesystem.
 This provides strong process isolation without requiring agent code changes.
 
-## Installation
+v0.1.0 — early. Real-model verified against `gpt-5.4` with `python:3.12-slim` containers. See [VERIFICATION.md](https://github.com/LemonCANDY42/emerge/blob/main/VERIFICATION.md).
 
-Part of the `emerge` monorepo. Import from workspace packages:
+## Install
 
-```ts
-import { HarborSandbox } from "@emerge/sandbox-harbor";
+```bash
+npm install @emerge/sandbox-harbor
 ```
 
 ## Usage

@@ -1,8 +1,17 @@
 {
   "name": "@emerge/kernel",
-  "version": "0.0.0",
-  "description": "The emerge kernel: contracts, scheduler, message bus, lifecycle.",
+  "version": "0.1.0",
+  "description": "Contracts, scheduler, message bus, and lifecycle runtime for the emerge agent harness.",
   "license": "MIT",
+  "author": "emerge contributors",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/LemonCANDY42/emerge.git",
+    "directory": "packages/kernel"
+  },
+  "homepage": "https://github.com/LemonCANDY42/emerge#readme",
+  "bugs": "https://github.com/LemonCANDY42/emerge/issues",
+  "keywords": ["agent", "llm", "harness", "multi-agent", "kernel", "typescript"],
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -20,7 +29,7 @@
       "import": "./dist/runtime/index.js"
     }
   },
-  "files": ["dist", "src"],
+  "files": ["dist", "README.md", "LICENSE"],
   "scripts": {
     "build": "tsc -b",
     "typecheck": "tsc -b",
@@ -28,6 +37,9 @@
   },
   "publishConfig": {
     "access": "public"
+  },
+  "engines": {
+    "node": ">=20"
   },
   "devDependencies": {
     "@types/node": "^20.11.0"

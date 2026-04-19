@@ -1,7 +1,17 @@
 {
   "name": "@emerge/tui",
-  "version": "0.0.0",
-  "private": true,
+  "version": "0.1.0",
+  "description": "Ink+React terminal UI monitor for emerge agent sessions: live topology, verdicts, cost, and replay scrubber.",
+  "license": "MIT",
+  "author": "emerge contributors",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/LemonCANDY42/emerge.git",
+    "directory": "packages/tui"
+  },
+  "homepage": "https://github.com/LemonCANDY42/emerge#readme",
+  "bugs": "https://github.com/LemonCANDY42/emerge/issues",
+  "keywords": ["agent", "tui", "terminal", "ink", "emerge", "monitor"],
   "type": "module",
   "bin": {
     "emerge-tui": "./dist/cli.js"
@@ -18,13 +28,20 @@
       "import": "./dist/state/index.js"
     }
   },
+  "files": ["dist", "README.md", "LICENSE"],
   "scripts": {
     "build": "tsc -b",
     "typecheck": "tsc -b",
     "clean": "rm -rf dist *.tsbuildinfo"
   },
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=20"
+  },
   "dependencies": {
-    "@emerge/kernel": "workspace:*",
+    "@emerge/kernel": "workspace:^0.1.0",
     "commander": "^12.1.0",
     "ink": "^5.2.1",
     "react": "^18.3.1"
