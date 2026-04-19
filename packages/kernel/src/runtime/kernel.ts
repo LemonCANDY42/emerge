@@ -626,6 +626,7 @@ export class Kernel {
       schemaAdapterRegistry: this.schemaAdapterRegistry,
       verification: this.deps.verification,
       adjudicatorId: this.config.roles.adjudicator,
+      sessionMode: this.config.mode,
     });
 
     this.handles.set(spec.id, runner);
