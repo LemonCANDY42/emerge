@@ -327,9 +327,25 @@ async function main(): Promise<void> {
       console.log(`\nSession cost: $${ledger.totals.grand.toFixed(6)}`);
     }
 
-    // Final
-    const passed = acceptance.verdict.kind === "aligned";
+    // Final — honest gate: BOTH the standalone acceptance AND the kernel verdict gate
+    // (which runs the Adjudicator-mounted acceptance on the agent's terminal result envelope)
+    // must agree. The kernel's verdict gate is the authoritative one for ADR 0035.
+    const passed =
+      acceptance.verdict.kind === "aligned" && bugFixed && endResult.ok;
     console.log(`\n=== FINAL RESULT: ${passed ? "PASS" : "FAIL"} ===`);
+
+    if (!endResult.ok) {
+      console.error(
+        "\nASSERTION: Kernel verdict gate refused to mark session completed.",
+      );
+      console.error(
+        "This indicates the Adjudicator-mounted acceptance run disagrees with the standalone one,",
+      );
+      console.error(
+        "or the Adjudicator never received an aligned verdict before endSession().",
+      );
+      process.exit(1);
+    }
 
     if (!passed) {
       console.error("\nASSERTION: Expected aligned verdict but acceptance failed.");
