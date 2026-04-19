@@ -29,7 +29,7 @@ import type {
 } from "@emerge/kernel/contracts";
 import type { ToolRegistry } from "@emerge/kernel/contracts";
 import { Kernel } from "@emerge/kernel/runtime";
-import type { KernelDeps } from "@emerge/kernel/runtime";
+import type { KernelDeps, SchemaAdapter } from "@emerge/kernel/runtime";
 import { HarborSandbox } from "@emerge/sandbox-harbor";
 import { InProcSandbox } from "@emerge/sandbox-inproc";
 import { CalibratedSurveillance } from "@emerge/surveillance";
@@ -99,6 +99,17 @@ export interface SessionBuilderOptions {
    * See acceptance-runner.ts trust model docs.
    */
   readonly acceptanceSandbox?: AcceptanceSandbox;
+  /**
+   * JSON schema adapter for the provider.
+   * Different providers (OpenAI, Anthropic) require different JSON schema
+   * shapes for tool specs. Pass the provider-specific adapter so tool schemas
+   * are correctly adapted before being sent to the model.
+   *
+   * For OpenAI: import { openaiSchemaAdapter } from "@emerge/provider-openai"
+   * For Anthropic: import { anthropicSchemaAdapter } from "@emerge/provider-anthropic"
+   * For MockProvider (tests): omit — no adapter needed.
+   */
+  readonly schemaAdapter?: SchemaAdapter;
 }
 
 // ─── Built session handle ────────────────────────────────────────────────────
@@ -326,6 +337,13 @@ export function buildSession(opts: SessionBuilderOptions): BuiltSession {
   // See Bug 2 fix comment in the sandbox construction block above.
   kernel.mountSandbox(kernelSandbox);
   kernel.mountSurveillance(surveillance);
+  // Mount the schema adapter if provided. Real providers (OpenAI, Anthropic) need
+  // this to translate tool specs into the shape their API expects (e.g. OpenAI
+  // requires sanitized function names, Anthropic has different required/properties
+  // ordering). MockProvider doesn't care — adapter may be omitted for tests.
+  if (opts.schemaAdapter !== undefined) {
+    kernel.mountSchemaAdapter(provider.capabilities.id, opts.schemaAdapter);
+  }
 
   kernel.setSession(sessionId, contractId);
 

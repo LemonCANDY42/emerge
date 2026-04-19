@@ -581,8 +581,7 @@ export class OpenAIProvider implements Provider {
           if (c.type === "text") textParts.push(c.text);
           if (c.type === "tool_use") {
             const wireName = nameMap.originalToWire.get(c.name) ?? c.name;
-            const args =
-              typeof c.input === "string" ? c.input : JSON.stringify(c.input ?? {});
+            const args = typeof c.input === "string" ? c.input : JSON.stringify(c.input ?? {});
             inputMessages.push({
               type: "function_call",
               call_id: c.toolCallId,

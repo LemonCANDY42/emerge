@@ -249,6 +249,25 @@ importers:
         specifier: ^20.11.0
         version: 20.19.39
 
+  examples/tbench-real-inline:
+    dependencies:
+      '@emerge/eval-terminal-bench':
+        specifier: workspace:*
+        version: link:../../packages/eval-terminal-bench
+      '@emerge/kernel':
+        specifier: workspace:*
+        version: link:../../packages/kernel
+      '@emerge/provider-openai':
+        specifier: workspace:*
+        version: link:../../packages/providers/openai
+      '@emerge/sandbox-inproc':
+        specifier: workspace:*
+        version: link:../../packages/sandbox-inproc
+    devDependencies:
+      '@types/node':
+        specifier: ^20.11.0
+        version: 20.19.39
+
   examples/tbench-smoke-docker:
     dependencies:
       '@emerge/eval-terminal-bench':
