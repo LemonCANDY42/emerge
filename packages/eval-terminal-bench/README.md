@@ -8,9 +8,21 @@ Terminal-Bench task runner for the emerge agent harness. Provides:
 - **Acceptance runner** — run acceptance commands and produce verdicts
 - **CLI** — `emerge-tbench run <task.yaml>` for local task execution
 
-## Installation
+v0.1.0 — early. Real-model verified against `gpt-5.4` with Docker and inproc sandboxes — see VERIFICATION.md.
 
-This package is part of the `emerge` monorepo. Import from other workspace packages:
+## Install
+
+```bash
+npm install @emerge/eval-terminal-bench
+```
+
+Or run without installing:
+
+```bash
+npx @emerge/eval-terminal-bench run task.yaml --sandbox inproc
+```
+
+## Import
 
 ```ts
 import {

@@ -1,7 +1,17 @@
 {
   "name": "@emerge/eval-terminal-bench",
-  "version": "0.0.0",
-  "private": true,
+  "version": "0.1.0",
+  "description": "Terminal-Bench task runner: task loader, session builder, blueprint, acceptance runner, and CLI for the emerge harness.",
+  "license": "MIT",
+  "author": "emerge contributors",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/LemonCANDY42/emerge.git",
+    "directory": "packages/eval-terminal-bench"
+  },
+  "homepage": "https://github.com/LemonCANDY42/emerge#readme",
+  "bugs": "https://github.com/LemonCANDY42/emerge/issues",
+  "keywords": ["agent", "eval", "terminal-bench", "benchmark", "emerge", "llm"],
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -14,20 +24,27 @@
       "import": "./dist/index.js"
     }
   },
+  "files": ["dist", "README.md", "LICENSE"],
   "scripts": {
     "build": "tsc -b",
     "typecheck": "tsc -b",
     "clean": "rm -rf dist *.tsbuildinfo"
   },
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=20"
+  },
   "dependencies": {
-    "@emerge/agents": "workspace:*",
-    "@emerge/kernel": "workspace:*",
-    "@emerge/provider-mock": "workspace:*",
-    "@emerge/sandbox-harbor": "workspace:*",
-    "@emerge/sandbox-inproc": "workspace:*",
-    "@emerge/surveillance": "workspace:*",
-    "@emerge/tools": "workspace:*",
-    "@emerge/workspaces-git-worktree": "workspace:*",
+    "@emerge/agents": "workspace:^0.1.0",
+    "@emerge/kernel": "workspace:^0.1.0",
+    "@emerge/provider-mock": "workspace:^0.1.0",
+    "@emerge/sandbox-harbor": "workspace:^0.1.0",
+    "@emerge/sandbox-inproc": "workspace:^0.1.0",
+    "@emerge/surveillance": "workspace:^0.1.0",
+    "@emerge/tools": "workspace:^0.1.0",
+    "@emerge/workspaces-git-worktree": "workspace:^0.1.0",
     "yaml": "^2.6.1",
     "zod": "^3.24.2"
   },

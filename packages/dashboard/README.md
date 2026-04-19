@@ -2,6 +2,20 @@
 
 Browser-based monitor for emerge agent sessions. Streams JSONL events over WebSocket to a React+Vite client.
 
+v0.1.0 — early. Dashboard verified via vitest server-side + jsdom client-side tests — see VERIFICATION.md.
+
+## Install
+
+```bash
+npm install -g @emerge/dashboard
+```
+
+Or run without installing:
+
+```bash
+npx @emerge/dashboard --session .emerge/session.jsonl
+```
+
 ## Security model
 
 **No authentication.** The dashboard is designed for local development use. Treat it like any other local dev server.

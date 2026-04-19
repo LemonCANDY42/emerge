@@ -1,7 +1,17 @@
 {
   "name": "@emerge/provider-mock",
-  "version": "0.0.0",
-  "private": true,
+  "version": "0.1.0",
+  "description": "Scripted mock LLM provider for deterministic testing and demos in the emerge harness.",
+  "license": "MIT",
+  "author": "emerge contributors",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/LemonCANDY42/emerge.git",
+    "directory": "packages/providers/mock"
+  },
+  "homepage": "https://github.com/LemonCANDY42/emerge#readme",
+  "bugs": "https://github.com/LemonCANDY42/emerge/issues",
+  "keywords": ["agent", "llm", "mock", "testing", "emerge"],
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -11,12 +21,19 @@
       "import": "./dist/index.js"
     }
   },
+  "files": ["dist", "README.md", "LICENSE"],
   "scripts": {
     "build": "tsc -b",
     "typecheck": "tsc -b",
     "clean": "rm -rf dist *.tsbuildinfo"
   },
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=20"
+  },
   "dependencies": {
-    "@emerge/kernel": "workspace:*"
+    "@emerge/kernel": "workspace:^0.1.0"
   }
 }

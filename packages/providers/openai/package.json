@@ -1,7 +1,17 @@
 {
   "name": "@emerge/provider-openai",
-  "version": "0.0.0",
-  "private": true,
+  "version": "0.1.0",
+  "description": "OpenAI provider adapter (chat and responses protocols) for the emerge agent harness.",
+  "license": "MIT",
+  "author": "emerge contributors",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/LemonCANDY42/emerge.git",
+    "directory": "packages/providers/openai"
+  },
+  "homepage": "https://github.com/LemonCANDY42/emerge#readme",
+  "bugs": "https://github.com/LemonCANDY42/emerge/issues",
+  "keywords": ["agent", "llm", "openai", "gpt", "emerge", "provider"],
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -11,14 +21,21 @@
       "import": "./dist/index.js"
     }
   },
+  "files": ["dist", "README.md", "LICENSE"],
   "scripts": {
     "build": "tsc -b",
     "typecheck": "tsc -b",
     "clean": "rm -rf dist *.tsbuildinfo"
   },
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=20"
+  },
   "dependencies": {
     "openai": "^4.80.0",
-    "@emerge/kernel": "workspace:*"
+    "@emerge/kernel": "workspace:^0.1.0"
   },
   "devDependencies": {
     "@types/node": "^20.11.0"

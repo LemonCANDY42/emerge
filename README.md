@@ -2,7 +2,35 @@
 
 > A next-generation agent harness — model-agnostic, multi-agent native, and self-aware.
 
-**Status:** early. Contracts are landing. Implementations follow.
+## Status
+
+**v0.1.0 published to npm 2026-04.** Real-model end-to-end verified against a custom OpenAI-compatible gateway (`gpt-5.4`). Anthropic / direct OpenAI / local-model paths (Ollama, vLLM, llama.cpp) are shipped but not yet verified end-to-end with a real model — see [VERIFICATION.md](./VERIFICATION.md).
+
+## Install
+
+Core packages:
+
+```bash
+npm install @emerge/kernel
+npm install @emerge/agents
+npm install @emerge/provider-openai-compat   # for any OpenAI-compatible endpoint
+npm install @emerge/provider-openai           # for direct OpenAI API
+npm install @emerge/provider-anthropic        # for Anthropic Claude
+npm install @emerge/sandbox-inproc            # in-process sandbox (fast, no Docker)
+npm install @emerge/sandbox-harbor            # Docker sandbox (strong isolation)
+npm install @emerge/tools                     # fs + bash tools
+npm install @emerge/telemetry-jsonl           # JSONL session logging
+npm install @emerge/replay                    # session record/replay
+npm install @emerge/surveillance              # adaptive decomposition
+```
+
+Interactive tools (install globally):
+
+```bash
+npm install -g @emerge/cli           # emerge run/replay/probe/status
+npm install -g @emerge/tui           # emerge-tui live terminal monitor
+npm install -g @emerge/dashboard     # emerge-dashboard browser monitor
+```
 
 `emerge` is a TypeScript harness for building durable, model-aware AI agents.
 Where most harnesses assume one model, one agent, one shot, `emerge` treats
