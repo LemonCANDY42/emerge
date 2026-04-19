@@ -6,10 +6,11 @@
  * Task: Read examples/README.md, summarize it, write the summary to NOTES.md.
  *
  * Environment variables:
- *   EMERGE_LLM_BASE_URL  (required; e.g. "http://localhost:11434/v1" for Ollama)
- *   EMERGE_LLM_MODEL     (required; e.g. "llama3.2")
- *   EMERGE_LLM_API_KEY   (optional; many local services don't need one)
- *   EMERGE_LLM_PROTOCOL  (optional; "chat" | "responses", default "chat")
+ *   EMERGE_LLM_BASE_URL          (required; e.g. "http://localhost:11434/v1" for Ollama)
+ *   EMERGE_LLM_MODEL             (required; e.g. "llama3.2")
+ *   EMERGE_LLM_API_KEY           (optional; many local services don't need one)
+ *   EMERGE_LLM_PROTOCOL          (optional; "chat" | "responses", default "chat")
+ *   EMERGE_LLM_REASONING_EFFORT  (optional; "minimal"|"low"|"medium"|"high"|"xhigh")
  *
  * Run against Ollama:
  *   EMERGE_LLM_BASE_URL=http://localhost:11434/v1 EMERGE_LLM_MODEL=llama3.2 \
@@ -20,6 +21,14 @@
  *   EMERGE_LLM_API_KEY=sk-or-... \
  *   EMERGE_LLM_MODEL=meta-llama/llama-3.3-70b-instruct \
  *     node examples/hello-agent-custom-url/dist/index.js
+ *
+ * Run against the user's custom gateway with reasoning:
+ *   EMERGE_LLM_BASE_URL=https://gmn.chuangzuoli.com \
+ *   EMERGE_LLM_API_KEY=sk-... \
+ *   EMERGE_LLM_MODEL=gpt-5.4 \
+ *   EMERGE_LLM_PROTOCOL=responses \
+ *   EMERGE_LLM_REASONING_EFFORT=xhigh \
+ *     node examples/hello-agent-custom-url/dist/index.js
  */
 
 import fs from "node:fs/promises";
@@ -29,7 +38,7 @@ import type { AgentId, SessionId } from "@emerge/kernel/contracts";
 import { Kernel } from "@emerge/kernel/runtime";
 import { BuiltinModeRegistry, permissionPolicyForMode } from "@emerge/modes";
 import { OpenAICompatProvider, openaiSchemaAdapter } from "@emerge/provider-openai-compat";
-import type { OpenAIProtocol } from "@emerge/provider-openai-compat";
+import type { OpenAIProtocol, OpenAIReasoningConfig } from "@emerge/provider-openai-compat";
 import { makeRecorder } from "@emerge/replay";
 import { InProcSandbox } from "@emerge/sandbox-inproc";
 import { makeFsReadTool, makeFsWriteTool } from "@emerge/tools";
@@ -69,6 +78,12 @@ async function main() {
   // biome-ignore lint/complexity/useLiteralKeys: env access requires bracket notation
   const protocolEnv = process.env["EMERGE_LLM_PROTOCOL"];
   const protocol: OpenAIProtocol = protocolEnv === "responses" ? "responses" : "chat";
+  // biome-ignore lint/complexity/useLiteralKeys: env access requires bracket notation
+  const reasoningEffortEnv = process.env["EMERGE_LLM_REASONING_EFFORT"] as
+    | OpenAIReasoningConfig["effort"]
+    | undefined;
+  const reasoning: OpenAIReasoningConfig | undefined =
+    reasoningEffortEnv !== undefined ? { effort: reasoningEffortEnv } : undefined;
 
   const provider = new OpenAICompatProvider({
     name: "custom-llm",
@@ -76,12 +91,16 @@ async function main() {
     model,
     ...(apiKey !== undefined ? { apiKey } : {}),
     protocol,
+    ...(reasoning !== undefined ? { reasoning } : {}),
   });
 
   console.log(`Provider: ${provider.capabilities.id}`);
   console.log(`  Base URL: ${baseURL}`);
   console.log(`  Model:    ${model}`);
   console.log(`  Protocol: ${protocol}`);
+  if (reasoning !== undefined) {
+    console.log(`  Reasoning: ${reasoning.effort}`);
+  }
 
   const modeRegistry = new BuiltinModeRegistry();
   const policy = permissionPolicyForMode(modeRegistry, "auto");

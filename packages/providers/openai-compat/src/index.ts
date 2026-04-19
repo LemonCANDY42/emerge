@@ -15,15 +15,34 @@
  *   kernel.mountProvider(new OpenAICompatProvider({ name: "vllm-worker", ... }))
  *
  * Re-exports openaiSchemaAdapter for convenience.
+ *
+ * ## extraParams
+ * Some gateways expose non-standard parameters (e.g. custom thinking knobs,
+ * routing hints, temperature overrides). Pass them via `extraParams` and they
+ * will be merged into every `responses.create` / `chat.completions.create` call.
+ *
+ * Example:
+ *   new OpenAICompatProvider({
+ *     name: "my-gateway",
+ *     baseURL: "https://api.my-gateway.com",
+ *     model: "gpt-5.4",
+ *     protocol: "responses",
+ *     extraParams: { reasoning_effort: "high", custom_field: true },
+ *   })
  */
 
 export { openaiSchemaAdapter } from "@emerge/provider-openai";
 export { OpenAIProvider } from "@emerge/provider-openai";
-export type { OpenAIProviderConfig, OpenAIProtocol } from "@emerge/provider-openai";
+export type {
+  OpenAIProviderConfig,
+  OpenAIProtocol,
+  OpenAIReasoningConfig,
+  RetryOptions,
+} from "@emerge/provider-openai";
 
 import type { ClaimedCapabilities, Provider, ProviderCapabilities } from "@emerge/kernel/contracts";
 import { OpenAIProvider } from "@emerge/provider-openai";
-import type { OpenAIProtocol } from "@emerge/provider-openai";
+import type { OpenAIProtocol, OpenAIReasoningConfig, RetryOptions } from "@emerge/provider-openai";
 
 export interface OpenAICompatConfig {
   /**
@@ -52,6 +71,31 @@ export interface OpenAICompatConfig {
    * window or cost structure. Partial — omitted fields use conservative defaults.
    */
   readonly capabilities?: Partial<ClaimedCapabilities>;
+  /**
+   * Retry-on-5xx configuration. Set to `false` to disable all retries.
+   * Default: 3 attempts, 500ms initial delay, 10s cap, with jitter.
+   */
+  readonly retry?: RetryOptions | false;
+  /**
+   * Reasoning configuration for gateways that support OpenAI-style reasoning knobs.
+   * Mirrors the OpenAI provider's `reasoning` option — forwarded verbatim.
+   *
+   * Environment variable mirror: EMERGE_LLM_REASONING_EFFORT
+   */
+  readonly reasoning?: OpenAIReasoningConfig;
+  /**
+   * Extra parameters to merge into every API call (responses.create or
+   * chat.completions.create). Useful for gateway-specific extensions such as
+   * custom thinking controls, routing hints, or non-standard temperature fields.
+   *
+   * These are passed through verbatim — the gateway is responsible for
+   * accepting or ignoring unknown fields. If the gateway rejects a field,
+   * the error will surface as a provider error event.
+   *
+   * Example:
+   *   extraParams: { reasoning_effort: "high", x_gateway_hint: "fast" }
+   */
+  readonly extraParams?: Record<string, unknown>;
 }
 
 const DEFAULT_CONSERVATIVE_CAPABILITIES: ClaimedCapabilities = {
@@ -81,6 +125,19 @@ export class OpenAICompatProvider implements Provider {
       ...config.capabilities,
     };
 
+    // Resolve reasoning from config or env var EMERGE_LLM_REASONING_EFFORT
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature requires bracket notation
+    const reasoningEnv = process.env["EMERGE_LLM_REASONING_EFFORT"] as
+      | OpenAIReasoningConfig["effort"]
+      | undefined;
+
+    const reasoning: OpenAIReasoningConfig | undefined =
+      config.reasoning !== undefined
+        ? config.reasoning
+        : reasoningEnv !== undefined
+          ? { effort: reasoningEnv }
+          : undefined;
+
     // C4: pass cost overrides into the inner OpenAIProvider so the USD calculation uses
     // the caller-supplied rates rather than defaults (which would be zero for custom URLs).
     this.inner = new OpenAIProvider({
@@ -91,6 +148,9 @@ export class OpenAICompatProvider implements Provider {
       ...(config.extraHeaders !== undefined ? { extraHeaders: config.extraHeaders } : {}),
       ...(claimed.costPerMtokIn !== undefined ? { costPerMtokIn: claimed.costPerMtokIn } : {}),
       ...(claimed.costPerMtokOut !== undefined ? { costPerMtokOut: claimed.costPerMtokOut } : {}),
+      ...(config.retry !== undefined ? { retry: config.retry } : {}),
+      ...(reasoning !== undefined ? { reasoning } : {}),
+      ...(config.extraParams !== undefined ? { extraParams: config.extraParams } : {}),
     });
 
     this.capabilities = {

@@ -1,6 +1,14 @@
 /**
  * AnthropicProvider — adapter for the Anthropic SDK.
  * M3b: exports the recommended schema adapter for Anthropic tool-use.
+ *
+ * Extended thinking:
+ *   Set `thinking: { type: "enabled", budget_tokens: N }` in config to enable
+ *   Claude's extended thinking. Thinking delta events are emitted as
+ *   ProviderEvent { type: "thinking_delta", text }.
+ *
+ *   Environment variable: ANTHROPIC_THINKING_BUDGET=8192 (positive integer).
+ *   Absent or 0 disables thinking.
  */
 
 // M3b: export the Anthropic-tuned schema adapter so consumers can mount it in one line:
@@ -19,6 +27,24 @@ import type {
   ReproducibilityTier,
   Result,
 } from "@emerge/kernel/contracts";
+import type { RetryOptions, SleepFn } from "./retry.js";
+import { DEFAULT_RETRY_OPTIONS, defaultSleep, withRetry } from "./retry.js";
+import { buildToolNameMap } from "./sanitize.js";
+
+/**
+ * Extended thinking configuration for Claude models that support it
+ * (claude-3.7-sonnet, claude-opus-4-x).
+ *
+ * When `type: "enabled"`, the `budget_tokens` controls how many tokens
+ * Claude may use for internal reasoning before producing its response.
+ *
+ * Environment variable: ANTHROPIC_THINKING_BUDGET=8192
+ *   A positive integer enables thinking with that budget.
+ *   Absent or 0 disables thinking.
+ */
+export type AnthropicThinkingConfig =
+  | { readonly type: "enabled"; readonly budget_tokens: number }
+  | { readonly type: "disabled" };
 
 export interface AnthropicProviderConfig {
   readonly apiKey?: string;
@@ -46,6 +72,19 @@ export interface AnthropicProviderConfig {
   readonly pinTopP?: number;
   /** Sink for divergence records when pinned tier detects mismatches. */
   readonly divergenceSink?: (d: Divergence) => void;
+  /**
+   * Retry-on-5xx configuration. Set to `false` to disable all retries.
+   * Default: 3 attempts, 500ms initial delay, 10s cap, with jitter.
+   */
+  readonly retry?: RetryOptions | false;
+  /**
+   * Extended thinking configuration. When `type: "enabled"`, Claude will
+   * perform internal reasoning before responding, and thinking_delta events
+   * will be emitted. Models that support this: claude-3.7-sonnet, claude-opus-4-x.
+   *
+   * Read from ANTHROPIC_THINKING_BUDGET env var if not provided explicitly.
+   */
+  readonly thinking?: AnthropicThinkingConfig;
 }
 
 const DEFAULT_MODEL = "claude-opus-4-7";
@@ -59,14 +98,39 @@ export class AnthropicProvider implements Provider {
   private readonly pinTemperature: number;
   private readonly pinTopP: number | undefined;
   private readonly divergenceSink: ((d: Divergence) => void) | undefined;
+  private readonly retryOpts: RetryOptions | false;
+  private readonly thinkingConfig: AnthropicThinkingConfig | undefined;
+  // Injected sleep for testability
+  readonly _sleep: SleepFn;
 
-  constructor(config: AnthropicProviderConfig = {}) {
+  constructor(config: AnthropicProviderConfig = {}, _sleep: SleepFn = defaultSleep) {
     this.model = config.model ?? DEFAULT_MODEL;
     this.tier = config.tier ?? "free";
     this.pinSeed = config.pinSeed;
     this.pinTemperature = config.pinTemperature ?? 0;
     this.pinTopP = config.pinTopP;
     this.divergenceSink = config.divergenceSink;
+    this.retryOpts = config.retry !== undefined ? config.retry : DEFAULT_RETRY_OPTIONS;
+    this._sleep = _sleep;
+
+    // Resolve thinking config: explicit config wins over env var
+    if (config.thinking !== undefined) {
+      this.thinkingConfig = config.thinking;
+    } else {
+      // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature requires bracket notation
+      const budgetEnv = process.env["ANTHROPIC_THINKING_BUDGET"];
+      if (budgetEnv !== undefined) {
+        const budget = Number.parseInt(budgetEnv, 10);
+        if (!Number.isNaN(budget) && budget > 0) {
+          this.thinkingConfig = { type: "enabled", budget_tokens: budget };
+        } else {
+          this.thinkingConfig = { type: "disabled" };
+        }
+      } else {
+        this.thinkingConfig = undefined;
+      }
+    }
+
     this.client = new Anthropic({
       // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature requires bracket notation
       apiKey: config.apiKey ?? process.env["ANTHROPIC_API_KEY"],
@@ -82,7 +146,7 @@ export class AnthropicProvider implements Provider {
         streamingToolUse: true,
         vision: true,
         audio: false,
-        thinking: false,
+        thinking: !!(this.thinkingConfig !== undefined && this.thinkingConfig.type === "enabled"),
         latencyTier: "interactive",
         costPerMtokIn: 15,
         costPerMtokOut: 75,
@@ -145,10 +209,14 @@ export class AnthropicProvider implements Provider {
       chatMessages.push({ role: msg.role as "user" | "assistant", content: blocks });
     }
 
+    // Build per-request name map: sanitizes dotted emerge names (e.g. "fs.read" → "fs_read")
+    // and enables reverse-translation of incoming tool_use names back to original.
+    const nameMap = buildToolNameMap(req.tools ?? []);
+
     const anthropicTools: Anthropic.Tool[] | undefined =
       req.tools && req.tools.length > 0
         ? req.tools.map((t: ProviderToolSpec) => ({
-            name: t.name,
+            name: nameMap.originalToWire.get(t.name) ?? t.name,
             description: t.description,
             input_schema: (t.inputSchema ?? { type: "object" }) as Anthropic.Tool.InputSchema,
           }))
@@ -169,6 +237,17 @@ export class AnthropicProvider implements Provider {
       if (systemText) streamParams.system = systemText;
       if (anthropicTools) streamParams.tools = anthropicTools;
       if (req.stopSequences) streamParams.stop_sequences = [...req.stopSequences];
+
+      // Extended thinking: inject the thinking parameter when enabled.
+      // The Anthropic SDK types don't include `thinking` in the public params
+      // type yet for all SDK versions, so we cast through unknown.
+      if (this.thinkingConfig !== undefined && this.thinkingConfig.type === "enabled") {
+        // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature requires bracket notation
+        (streamParams as unknown as Record<string, unknown>)["thinking"] = {
+          type: "enabled",
+          budget_tokens: this.thinkingConfig.budget_tokens,
+        };
+      }
 
       // Pinned tier: override temperature/top-p for best-effort reproducibility
       if (this.tier === "pinned") {
@@ -193,7 +272,16 @@ export class AnthropicProvider implements Provider {
 
       // M9: capture wall time around the actual API call
       const startMs = Date.now();
-      const stream = await this.client.messages.create(streamParams);
+
+      // Retry wraps the stream-creation call only. Once the stream is open and
+      // we've started yielding events, mid-stream errors are NOT retried to
+      // avoid duplicating already-emitted events.
+      const stream = await withRetry(
+        () => this.client.messages.create(streamParams),
+        this.retryOpts,
+        "anthropic",
+        this._sleep,
+      );
 
       let inputTokens = 0;
       let outputTokens = 0;
@@ -207,17 +295,26 @@ export class AnthropicProvider implements Provider {
         } else if (event.type === "content_block_start") {
           if (event.content_block.type === "tool_use") {
             const toolCallId = event.content_block.id;
-            const toolName = event.content_block.name;
+            // Reverse-translate wire name (e.g. "fs_read") back to original emerge
+            // name (e.g. "fs.read") before emitting to the agent-runner.
+            const wireName = event.content_block.name;
+            const toolName = nameMap.wireToOriginal.get(wireName) ?? wireName;
             toolCallIdToName.set(toolCallId, toolName);
             indexToToolCallId.set(event.index, toolCallId);
             yield { type: "tool_call_start", toolCallId, name: toolName };
           }
+          // thinking_start: content_block.type === "thinking" — no event to yield
+          // on block start; thinking text arrives via thinking_delta below.
         } else if (event.type === "content_block_delta") {
           if (event.delta.type === "text_delta") {
             yield { type: "text_delta", text: event.delta.text };
           } else if (event.delta.type === "input_json_delta") {
             const toolCallId = indexToToolCallId.get(event.index) ?? `idx-${event.index}`;
             yield { type: "tool_call_input_delta", toolCallId, partial: event.delta.partial_json };
+          } else if (event.delta.type === "thinking_delta") {
+            // Extended thinking: emit thinking_delta events so callers can
+            // surface or record the model's reasoning trace.
+            yield { type: "thinking_delta", text: event.delta.thinking };
           }
         } else if (event.type === "content_block_stop") {
           const toolCallId = indexToToolCallId.get(event.index);
