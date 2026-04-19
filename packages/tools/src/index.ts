@@ -5,6 +5,7 @@
 import { exec } from "node:child_process";
 import { createReadStream, createWriteStream } from "node:fs";
 import fs from "node:fs/promises";
+import path from "node:path";
 import { promisify } from "node:util";
 import type {
   ArtifactHandle,
@@ -24,6 +25,42 @@ void createWriteStream;
 
 const execAsync = promisify(exec);
 
+/**
+ * Resolve `inputPath` against `baseDir` and verify the result stays inside
+ * `baseDir`. Returns the resolved absolute path on success, or an error if
+ * the path escapes the base directory.
+ *
+ * When `baseDir` is undefined the raw path is returned as-is (back-compat).
+ *
+ * Rules when `baseDir` is set:
+ *   - Relative paths are resolved against `baseDir`.
+ *   - Absolute paths must begin with `baseDir + "/"` (or equal `baseDir`).
+ *   - Any path that resolves outside `baseDir` returns E_PATH_ESCAPE.
+ */
+function resolveConstrainedPath(
+  inputPath: string,
+  baseDir: string | undefined,
+): Result<string, ContractError> {
+  if (baseDir === undefined) {
+    return { ok: true, value: inputPath };
+  }
+  const normalBase = path.resolve(baseDir);
+  const resolved = path.isAbsolute(inputPath)
+    ? path.resolve(inputPath)
+    : path.resolve(normalBase, inputPath);
+  // resolved must equal normalBase or start with normalBase + sep
+  if (resolved !== normalBase && !resolved.startsWith(normalBase + path.sep)) {
+    return {
+      ok: false,
+      error: {
+        code: "E_PATH_ESCAPE",
+        message: `Path "${inputPath}" resolves to "${resolved}" which is outside the workspace root "${normalBase}"`,
+      },
+    };
+  }
+  return { ok: true, value: resolved };
+}
+
 // Zod 3.24 conforms to StandardSchema v1 structurally, but TS's strict
 // exactOptionalPropertyTypes catches a mismatch in the failure branch shape.
 // Cast through unknown rather than weaken the function signature.
@@ -37,7 +74,20 @@ function zodToSchemaRef<T extends z.ZodTypeAny>(
 
 const fsReadSchema = z.object({ path: z.string() });
 
-export function makeFsReadTool(sandbox: Sandbox): Tool {
+export interface FsToolOptions {
+  /**
+   * When set, all paths are resolved relative to this directory and must
+   * stay inside it. Relative paths are joined against baseDir; absolute
+   * paths must begin with baseDir. Paths that resolve outside return
+   * E_PATH_ESCAPE without touching the filesystem.
+   *
+   * Default: undefined (no constraint — back-compat).
+   */
+  readonly baseDir?: string;
+}
+
+export function makeFsReadTool(sandbox: Sandbox, opts?: FsToolOptions): Tool {
+  const baseDir = opts?.baseDir;
   return {
     spec: {
       name: "fs.read",
@@ -59,8 +109,11 @@ export function makeFsReadTool(sandbox: Sandbox): Tool {
       if (!parsed.success) {
         return { ok: false, error: { code: "E_INPUT", message: parsed.error.message } };
       }
-      const result = await sandbox.run({ effect: "fs_read", target: parsed.data.path }, async () =>
-        fs.readFile(parsed.data.path, "utf-8"),
+      const resolveResult = resolveConstrainedPath(parsed.data.path, baseDir);
+      if (!resolveResult.ok) return resolveResult;
+      const resolvedPath = resolveResult.value;
+      const result = await sandbox.run({ effect: "fs_read", target: resolvedPath }, async () =>
+        fs.readFile(resolvedPath, "utf-8"),
       );
       if (!result.ok) return result;
       const text = result.value;
@@ -85,7 +138,8 @@ export function makeFsReadTool(sandbox: Sandbox): Tool {
 
 const fsWriteSchema = z.object({ path: z.string(), content: z.string() });
 
-export function makeFsWriteTool(sandbox: Sandbox): Tool {
+export function makeFsWriteTool(sandbox: Sandbox, opts?: FsToolOptions): Tool {
+  const baseDir = opts?.baseDir;
   return {
     spec: {
       name: "fs.write",
@@ -110,22 +164,22 @@ export function makeFsWriteTool(sandbox: Sandbox): Tool {
       if (!parsed.success) {
         return { ok: false, error: { code: "E_INPUT", message: parsed.error.message } };
       }
-      const result = await sandbox.run(
-        { effect: "fs_write", target: parsed.data.path },
-        async () => {
-          const dir = parsed.data.path.replace(/\/[^/]+$/, "");
-          if (dir && dir !== parsed.data.path) {
-            await fs.mkdir(dir, { recursive: true });
-          }
-          await fs.writeFile(parsed.data.path, parsed.data.content, "utf-8");
-        },
-      );
+      const resolveResult = resolveConstrainedPath(parsed.data.path, baseDir);
+      if (!resolveResult.ok) return resolveResult;
+      const resolvedPath = resolveResult.value;
+      const result = await sandbox.run({ effect: "fs_write", target: resolvedPath }, async () => {
+        const dir = path.dirname(resolvedPath);
+        if (dir && dir !== resolvedPath) {
+          await fs.mkdir(dir, { recursive: true });
+        }
+        await fs.writeFile(resolvedPath, parsed.data.content, "utf-8");
+      });
       if (!result.ok) return result;
       return {
         ok: true,
         value: {
           ok: true,
-          preview: `Written ${parsed.data.content.length} bytes to ${parsed.data.path}`,
+          preview: `Written ${parsed.data.content.length} bytes to ${resolvedPath}`,
           sizeBytes: parsed.data.content.length,
           mediaType: "application/json",
         },
