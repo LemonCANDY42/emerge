@@ -181,6 +181,9 @@ export function buildSession(opts: SessionBuilderOptions): BuiltSession {
       ? { workspaceDir: workspaceRoot, image: harborImage }
       : { workspaceDir: workspaceRoot };
 
+  // Tool-level sandbox policy: the real authorization gate for inproc mode.
+  // For harbor mode, HarborSandbox provides Docker-based isolation for process_spawn;
+  // FS and state effects run in-process. Network effects are denied at the tool level.
   const inprocPolicy: import("@emerge/kernel/contracts").PermissionPolicy = {
     fs: { read: "auto", write: "auto", delete: "deny" },
     net: { read: "deny", write: "deny" },
@@ -190,8 +193,39 @@ export function buildSession(opts: SessionBuilderOptions): BuiltSession {
     mcp: { servers: "all" },
   };
 
-  const sandbox =
+  // Bug 2 fix: separate the tool-level sandbox (used inside tool implementations)
+  // from the kernel-level sandbox (mounted on the kernel for authorization).
+  //
+  // For harbor mode, the HarborSandbox is passed to the FS/bash tool factories.
+  // Those tools handle Docker dispatch internally via their own sandbox.run() call.
+  // If HarborSandbox were also mounted on the kernel, the agent-runner would wrap
+  // each tool.invoke() in an outer sandbox.run({ effect: "process_spawn", target: toolName })
+  // call — and HarborSandbox would then run "docker run ... bash -c toolName" (the tool
+  // NAME, not the actual command), ignoring the fn() callback entirely. The real
+  // command would never execute.
+  //
+  // The kernel-level sandbox is used only for authorization checks and the outer
+  // sandbox.run() wrapper in agent-runner. An InProcSandbox with a fully-permissive
+  // policy is correct here: the tool-level sandbox (inside each tool's invoke()) is
+  // the real authorization gate. We must allow all effects at the kernel level so
+  // that the agent-runner's authorization loop does not deny tools before they can
+  // delegate to their own sandbox.
+  const toolSandbox =
     sandboxMode === "harbor" ? new HarborSandbox(harborOpts) : new InProcSandbox(inprocPolicy);
+  // kernelPolicy: allow all effects — real authorization is inside each tool's sandbox.
+  const kernelPolicy: import("@emerge/kernel/contracts").PermissionPolicy = {
+    fs: { read: "auto", write: "auto", delete: "auto" },
+    net: { read: "auto", write: "auto" },
+    process: { spawn: "auto", kill: "auto" },
+    agent: { spawn: "auto", message: "auto" },
+    tools: { allow: "all" },
+    mcp: { servers: "all" },
+  };
+  // kernelSandbox: always InProcSandbox — does not re-dispatch tool calls to Docker.
+  // The tool-level sandbox (toolSandbox) handles Docker dispatch for process_spawn.
+  const kernelSandbox = new InProcSandbox(kernelPolicy);
+  // Alias for clarity in tool registration below.
+  const sandbox = toolSandbox;
 
   // Acceptance sandbox: default to host for inproc (back-compat), harbor for harbor mode.
   const acceptanceSandbox: AcceptanceSandbox =
@@ -228,9 +262,14 @@ export function buildSession(opts: SessionBuilderOptions): BuiltSession {
   // Session-scoped tool registry (Critical #4: do NOT use the kernel's shared registry).
   // Tools wrapped with auto-permission below are registered here only; they are
   // invisible to other sessions or kernels that might reuse the same provider.
+  //
+  // Bug 3 fix: pass baseDir so all relative (and absolute) paths are constrained
+  // to the workspace root. Paths that escape via ".." or absolute prefixes outside
+  // the workspace are rejected with E_PATH_ESCAPE before touching the filesystem.
+  const fsOpts = { baseDir: workspaceRoot };
   const sessionToolRegistry = new SessionToolRegistry();
-  sessionToolRegistry.register(withAutoPermission(makeFsReadTool(sandbox)));
-  sessionToolRegistry.register(withAutoPermission(makeFsWriteTool(sandbox)));
+  sessionToolRegistry.register(withAutoPermission(makeFsReadTool(sandbox, fsOpts)));
+  sessionToolRegistry.register(withAutoPermission(makeFsWriteTool(sandbox, fsOpts)));
   sessionToolRegistry.register(withAutoPermission(makeBashTool(sandbox)));
 
   // CalibratedSurveillance: no-op probes for synthetic tasks (ceiling: trivial).
@@ -283,7 +322,9 @@ export function buildSession(opts: SessionBuilderOptions): BuiltSession {
   );
 
   kernel.mountProvider(provider);
-  kernel.mountSandbox(sandbox);
+  // Mount the passthrough InProcSandbox on the kernel — NOT the tool-level sandbox.
+  // See Bug 2 fix comment in the sandbox construction block above.
+  kernel.mountSandbox(kernelSandbox);
   kernel.mountSurveillance(surveillance);
 
   kernel.setSession(sessionId, contractId);

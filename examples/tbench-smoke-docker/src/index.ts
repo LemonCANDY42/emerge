@@ -250,6 +250,10 @@ async function main(): Promise<void> {
     provider,
     sandboxMode: "harbor",
     harborImage: DOCKER_IMAGE,
+    // Acceptance sandbox: use host mode because python:3.12-slim does not ship with
+    // pytest and --network=none prevents pip install inside the acceptance container.
+    // Production tbench runs should use a custom image with pytest pre-baked in.
+    acceptanceSandbox: { kind: "host" },
   });
 
   console.log(`\nSession: ${session.sessionId}`);
@@ -330,20 +334,15 @@ async function main(): Promise<void> {
     // Final — honest gate: BOTH the standalone acceptance AND the kernel verdict gate
     // (which runs the Adjudicator-mounted acceptance on the agent's terminal result envelope)
     // must agree. The kernel's verdict gate is the authoritative one for ADR 0035.
-    const passed =
-      acceptance.verdict.kind === "aligned" && bugFixed && endResult.ok;
+    const passed = acceptance.verdict.kind === "aligned" && bugFixed && endResult.ok;
     console.log(`\n=== FINAL RESULT: ${passed ? "PASS" : "FAIL"} ===`);
 
     if (!endResult.ok) {
-      console.error(
-        "\nASSERTION: Kernel verdict gate refused to mark session completed.",
-      );
+      console.error("\nASSERTION: Kernel verdict gate refused to mark session completed.");
       console.error(
         "This indicates the Adjudicator-mounted acceptance run disagrees with the standalone one,",
       );
-      console.error(
-        "or the Adjudicator never received an aligned verdict before endSession().",
-      );
+      console.error("or the Adjudicator never received an aligned verdict before endSession().");
       process.exit(1);
     }
 

@@ -264,12 +264,8 @@ async function main(): Promise<void> {
 
     if (!endResult.ok) {
       console.error("\nASSERTION: Kernel verdict gate refused to mark session completed.");
-      console.error(
-        "The Adjudicator-mounted acceptance run disagrees with the standalone one,",
-      );
-      console.error(
-        "or no aligned verdict reached the kernel before endSession().",
-      );
+      console.error("The Adjudicator-mounted acceptance run disagrees with the standalone one,");
+      console.error("or no aligned verdict reached the kernel before endSession().");
       process.exit(1);
     }
 
