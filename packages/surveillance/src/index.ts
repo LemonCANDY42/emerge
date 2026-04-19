@@ -218,6 +218,18 @@ export interface CalibratedSurveillanceConfig {
    * the decomposition depth limit emits defer instead of decompose.
    */
   readonly deferOnBudgetOvershoot?: boolean;
+  /**
+   * When true, cost-overshoot ratio never triggers decomposition.
+   *
+   * The cost-overshoot decompose path is only meaningful when the heuristic
+   * forecast is calibrated against a real provider's pricing. For scripted mock
+   * providers (where USD values in events are arbitrary) the forecast heuristic
+   * can produce near-zero predictions, leading to spurious 100x+ overshots that
+   * trigger decomposition on every second step. Set this to true in tbench
+   * sessions that use MockProvider or any provider where cost tracking is not
+   * meaningful for decomposition decisions.
+   */
+  readonly disableCostOvershootDecompose?: boolean;
 }
 
 export class CalibratedSurveillance implements Surveillance, ExperienceAware {
@@ -225,6 +237,7 @@ export class CalibratedSurveillance implements Surveillance, ExperienceAware {
   private readonly failureRateThreshold: number;
   private readonly escalateTo: ProviderId | undefined;
   private readonly deferOnBudgetOvershoot: boolean;
+  private readonly disableCostOvershootDecompose: boolean;
   private experienceLibrary: ExperienceLibrary | undefined;
 
   // Rolling stats: key = `${providerId}::${difficulty}`
@@ -239,6 +252,7 @@ export class CalibratedSurveillance implements Surveillance, ExperienceAware {
     this.failureRateThreshold = config.failureRateThreshold ?? 0.25;
     this.escalateTo = config.escalateTo;
     this.deferOnBudgetOvershoot = config.deferOnBudgetOvershoot ?? false;
+    this.disableCostOvershootDecompose = config.disableCostOvershootDecompose ?? false;
     this.experienceLibrary = config.experienceLibrary;
     if (config.envelope) {
       for (const [k, v] of config.envelope) {
@@ -288,8 +302,10 @@ export class CalibratedSurveillance implements Surveillance, ExperienceAware {
       };
     }
 
-    // Cost-overshoot (>= 1.5 ratio) biases toward decompose
-    const costBiasesDecompose = costOvershootRate > 0.3;
+    // Cost-overshoot (>= 1.5 ratio) biases toward decompose.
+    // Disabled when disableCostOvershootDecompose=true (e.g. scripted mock providers
+    // where the heuristic forecast is not calibrated against real pricing).
+    const costBiasesDecompose = !this.disableCostOvershootDecompose && costOvershootRate > 0.3;
 
     // Determine model's effective competence ceiling from probes or observed
     const probeCeiling = this.probeHighWater.get(providerId);

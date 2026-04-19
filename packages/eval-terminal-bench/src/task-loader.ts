@@ -13,10 +13,37 @@ import { z } from "zod";
 
 // ─── TaskSpec Zod schema ──────────────────────────────────────────────────────
 
-const InlineRepoSchema = z.object({ kind: z.literal("inline"), files: z.record(z.string()) });
+/**
+ * Validate that a file key cannot escape the workspace directory.
+ * Rejects: absolute paths, path segments containing "..", empty/whitespace keys.
+ */
+function isSafeRelativePath(key: string): boolean {
+  if (key.trim() === "") return false; // empty / whitespace-only
+  if (path.isAbsolute(key)) return false; // absolute path
+  // Reject any segment that is exactly ".." or starts with ".." followed by a separator
+  const segments = key.split(/[/\\]/);
+  return !segments.some((seg) => seg === ".." || seg === "...");
+}
+
+const SafeFileKeySchema = z.string().min(1).refine(isSafeRelativePath, {
+  message:
+    "File key must be a safe relative path: no absolute paths, no '..' segments, no empty keys",
+});
+
+const InlineRepoSchema = z.object({
+  kind: z.literal("inline"),
+  files: z.record(SafeFileKeySchema, z.string()),
+});
 const GitRepoSchema = z.object({
   kind: z.literal("git"),
-  url: z.string().url(),
+  // Restrict to https:// and http:// only. file:// and ssh:// allow .gitattributes
+  // filter-driver exploits and host filesystem access via git clone.
+  url: z
+    .string()
+    .url()
+    .refine((u) => /^https?:\/\//.test(u), {
+      message: "Git URL must use https:// or http:// scheme (file:// and ssh:// are not allowed)",
+    }),
   commit: z.string().min(1),
 });
 
@@ -125,20 +152,53 @@ export async function materializeTask(spec: TaskSpec): Promise<Result<LoadedTask
   const ws = allocResult.value;
 
   if (spec.repo.kind === "inline") {
-    // Write each file into the workspace
+    // Write each file into the workspace.
+    // Defense-in-depth: even though Zod already rejected unsafe keys, we
+    // re-verify the resolved path is still inside the workspace root. This
+    // guards against TOCTOU races or creative Unicode normalization tricks.
+    const wsRoot = path.resolve(ws.root);
     for (const [relPath, content] of Object.entries(spec.repo.files)) {
-      const absPath = path.join(ws.root, relPath);
+      const absPath = path.resolve(wsRoot, relPath);
+      if (!absPath.startsWith(wsRoot + path.sep) && absPath !== wsRoot) {
+        await mgr.close(ws.id);
+        return {
+          ok: false,
+          error: {
+            code: "E_PATH_ESCAPE",
+            message: `File key "${relPath}" resolves outside workspace root (resolved: ${absPath})`,
+          },
+        };
+      }
       const dir = path.dirname(absPath);
       await fs.mkdir(dir, { recursive: true });
       await fs.writeFile(absPath, content, "utf-8");
     }
   } else {
-    // Clone the git repo
+    // Clone the git repo.
+    // Safety flags:
+    //   -c protocol.allow=https   — reject non-https submodule/alternate transports
+    //   -c filter.*.smudge=cat    — neutralize .gitattributes filter drivers (no exec on checkout)
+    //   -c core.symlinks=false    — prevent symlink-based path escapes on checkout
     try {
-      execFileSync("git", ["clone", "--quiet", spec.repo.url, ws.root], {
-        stdio: ["ignore", "pipe", "pipe"],
-        timeout: 120_000,
-      });
+      execFileSync(
+        "git",
+        [
+          "-c",
+          "protocol.allow=https",
+          "-c",
+          "filter.*.smudge=cat",
+          "-c",
+          "core.symlinks=false",
+          "clone",
+          "--quiet",
+          spec.repo.url,
+          ws.root,
+        ],
+        {
+          stdio: ["ignore", "pipe", "pipe"],
+          timeout: 120_000,
+        },
+      );
       execFileSync("git", ["checkout", "--quiet", spec.repo.commit], {
         cwd: ws.root,
         stdio: ["ignore", "pipe", "pipe"],

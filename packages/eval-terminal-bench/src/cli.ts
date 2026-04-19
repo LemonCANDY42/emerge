@@ -94,6 +94,20 @@ async function main(): Promise<void> {
   console.log(`[emerge-tbench] Workspace: ${task.workspaceRoot}`);
   console.log(`[emerge-tbench] Sandbox: ${opts.sandboxMode}`);
 
+  // Register SIGINT/SIGTERM cleanup so Ctrl-C doesn't leave workspaces in
+  // /tmp/.emerge-workspaces/. cleanup() is synchronous in effect (it schedules
+  // async work) but we call it and wait 200ms to let the fs.rm settle before exit.
+  const cleanupAndExit = (signal: string) => {
+    console.log(`\n[emerge-tbench] ${signal} received — cleaning up workspace...`);
+    void task.cleanup().then(() => {
+      process.exit(130); // Standard exit code for signal termination
+    });
+    // Hard exit after 2 seconds in case cleanup hangs
+    setTimeout(() => process.exit(130), 2000).unref();
+  };
+  process.once("SIGINT", () => cleanupAndExit("SIGINT"));
+  process.once("SIGTERM", () => cleanupAndExit("SIGTERM"));
+
   // Mock provider script — two steps: read file, write fix, then end
   const provider = new MockProvider(
     [

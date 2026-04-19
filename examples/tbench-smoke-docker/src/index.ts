@@ -20,8 +20,11 @@
 import { execFileSync } from "node:child_process";
 import fs from "node:fs/promises";
 import path from "node:path";
-import { materializeTask, runAcceptance } from "@emerge/eval-terminal-bench";
-import { makeTerminalBenchBlueprint } from "@emerge/eval-terminal-bench";
+import {
+  makeTerminalBenchBlueprint,
+  materializeTask,
+  runAcceptance,
+} from "@emerge/eval-terminal-bench";
 import type { ProviderEvent } from "@emerge/kernel/contracts";
 import { MockProvider } from "@emerge/provider-mock";
 
@@ -276,21 +279,26 @@ async function main(): Promise<void> {
     console.log(`  Tokens out: ${snapshot.usage.tokensOut}`);
     console.log(`  Wall time: ${wallMs}ms`);
 
-    // 6. Run acceptance tests (runs pytest inside Docker)
-    console.log(`\nRunning acceptance command (inside Docker): ${TASK_SPEC.acceptanceCommand}`);
+    // 6. Run acceptance tests on the host.
+    // Note: Harbor (Docker) acceptance requires a pre-installed pytest image because
+    // the acceptance container runs with --network=none (no pip install). For this
+    // smoke test, we use host-mode acceptance since pytest is available on the host.
+    // In production tbench runs, use a custom image with test dependencies pre-baked,
+    // or allow network in the acceptance container for pip install.
+    console.log(`\nRunning acceptance command (host): ${TASK_SPEC.acceptanceCommand}`);
     const acceptanceStart = Date.now();
 
-    // Run acceptance inside Docker; python:3.12-slim needs pytest installed first.
-    const dockerAcceptanceCmd = `docker run --rm -v ${task.workspaceRoot}:/workspace -w /workspace ${DOCKER_IMAGE} sh -c "pip install -q pytest && python3 -m pytest tests/ -x -q"`;
     const acceptance = await runAcceptance(
-      dockerAcceptanceCmd,
+      TASK_SPEC.acceptanceCommand,
       task.workspaceRoot,
       TASK_SPEC.timeoutSeconds,
+      { kind: "host" },
     );
     const acceptanceDuration = Date.now() - acceptanceStart;
 
     console.log("\n=== Acceptance Result ===");
-    console.log(`  Command: ${dockerAcceptanceCmd}`);
+    console.log("  Mode: Host (agent sandbox: HarborSandbox with Docker)");
+    console.log(`  Command: ${TASK_SPEC.acceptanceCommand}`);
     console.log(`  Exit code: ${acceptance.exitCode}`);
     console.log(`  Duration: ${acceptanceDuration}ms`);
     console.log(`  Verdict: ${acceptance.verdict.kind}`);

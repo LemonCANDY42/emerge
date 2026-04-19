@@ -4,8 +4,10 @@
  *
  * Defaults:
  *   - trustMode: "explicit" (requires aligned verdict before endSession)
- *   - reproducibility: "record-replay" (session is replayable)
+ *   - reproducibility: "free" (not pinned to deterministic outputs)
  *   - Adjudicator mounted and watching the bus
+ *   - CalibratedSurveillance mounted (active profile; hint loop fires each step)
+ *   - verification gate: requireVerdictBeforeExit=true (ADR 0035)
  *   - Tools: fs.read, fs.write, bash (all scoped to workspace)
  *   - Budget: 100k tokensIn / 8k tokensOut / 5 min wall time
  *   - maxIterations: 20 (enough for small bugfix tasks)
@@ -102,6 +104,10 @@ When you are done, stop — do not keep iterating after the task is complete.`;
       maxConcurrency: 1,
     },
     lineage: { depth: 0 },
+    // ADR 0035: "active" surveillance means the hint loop fires before each step.
+    // CalibratedSurveillance is mounted in buildSession with a seeded trivial-ceiling
+    // envelope (appropriate for MockProvider; real providers need runProbesAsync()).
+    surveillance: "active",
   };
 
   return { session, agentSpec };

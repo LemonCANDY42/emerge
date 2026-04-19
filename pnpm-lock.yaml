@@ -457,6 +457,9 @@ importers:
       '@emerge/sandbox-inproc':
         specifier: workspace:*
         version: link:../sandbox-inproc
+      '@emerge/surveillance':
+        specifier: workspace:*
+        version: link:../surveillance
       '@emerge/tools':
         specifier: workspace:*
         version: link:../tools

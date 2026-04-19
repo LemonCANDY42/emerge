@@ -4,6 +4,16 @@
  * Wires: provider + tools (fs.read, fs.write, bash) + adjudicator +
  * workspace-scoped sandbox. The caller is responsible for spawning the
  * agent spec and calling endSession().
+ *
+ * ## Tool registry scoping (Critical #4 fix)
+ *
+ * The kernel's getToolRegistry() returns a SHARED registry — it is the same
+ * object across all sessions on that kernel instance. Registering auto-wrapped
+ * tools into it would mean that every future session created from the same
+ * kernel loses interactive permission gating. Instead, buildSession creates a
+ * session-scoped registry, registers the wrapped tools into it, and passes it
+ * via KernelDeps.toolRegistry when constructing the kernel. The scoped registry
+ * is private to this session; other kernels and sessions are unaffected.
  */
 
 import { buildAdjudicator } from "@emerge/agents";
@@ -14,14 +24,57 @@ import type {
   Provider,
   SessionId,
   Tool,
+  ToolSpec,
   Verdict,
 } from "@emerge/kernel/contracts";
+import type { ToolRegistry } from "@emerge/kernel/contracts";
 import { Kernel } from "@emerge/kernel/runtime";
+import type { KernelDeps } from "@emerge/kernel/runtime";
 import { HarborSandbox } from "@emerge/sandbox-harbor";
 import { InProcSandbox } from "@emerge/sandbox-inproc";
+import { CalibratedSurveillance } from "@emerge/surveillance";
 import { makeBashTool, makeFsReadTool, makeFsWriteTool } from "@emerge/tools";
+import type { AcceptanceSandbox } from "./acceptance-runner.js";
 import { makeAcceptanceEvaluator } from "./acceptance-runner.js";
 import type { TaskSpec } from "./task-loader.js";
+
+// ─── Session-scoped tool registry ────────────────────────────────────────────
+
+/**
+ * A minimal ToolRegistry implementation scoped to a single session.
+ * Unlike the kernel's shared registry, this one is constructed per-session
+ * and passed in via KernelDeps.toolRegistry so it never leaks to other sessions.
+ */
+class SessionToolRegistry implements ToolRegistry {
+  private readonly tools = new Map<string, Tool>();
+
+  register(tool: Tool): void {
+    if (this.tools.has(tool.spec.name)) {
+      throw Object.assign(
+        new Error(`Tool "${tool.spec.name}" already registered in this session registry`),
+        { code: "E_TOOL_DUPLICATE" },
+      );
+    }
+    this.tools.set(tool.spec.name, tool);
+  }
+
+  unregister(name: string): void {
+    this.tools.delete(name);
+  }
+
+  get(name: string): Tool | undefined {
+    return this.tools.get(name);
+  }
+
+  resolve(allow: readonly string[]): readonly Tool[] {
+    if (allow.length === 0) return [];
+    return allow.map((n) => this.tools.get(n)).filter((t): t is Tool => t !== undefined);
+  }
+
+  list(): readonly ToolSpec[] {
+    return [...this.tools.values()].map((t) => t.spec);
+  }
+}
 
 // ─── Session builder options ─────────────────────────────────────────────────
 
@@ -38,6 +91,14 @@ export interface SessionBuilderOptions {
   readonly harborImage?: string;
   /** Session id (generated if omitted). */
   readonly sessionId?: SessionId;
+  /**
+   * Sandbox to use for running the acceptance command.
+   * Default: { kind: "host" } for inproc mode (back-compat).
+   * For harbor mode, set to { kind: "harbor"; image: harborImage } to run
+   * acceptance in a fresh read-only container — prevents agent tamper.
+   * See acceptance-runner.ts trust model docs.
+   */
+  readonly acceptanceSandbox?: AcceptanceSandbox;
 }
 
 // ─── Built session handle ────────────────────────────────────────────────────
@@ -63,6 +124,9 @@ export interface BuiltSession {
  * wait 60 seconds — blocking automated eval runs. For tbench sessions the
  * sandbox policy provides the real guard; we override defaultMode so the
  * agent-runner passes through immediately.
+ *
+ * NOTE: This wrapped tool is registered in a SESSION-SCOPED registry (not the
+ * kernel's shared registry), so it does not affect other sessions or kernels.
  */
 function withAutoPermission(tool: Tool): Tool {
   return {
@@ -129,11 +193,19 @@ export function buildSession(opts: SessionBuilderOptions): BuiltSession {
   const sandbox =
     sandboxMode === "harbor" ? new HarborSandbox(harborOpts) : new InProcSandbox(inprocPolicy);
 
+  // Acceptance sandbox: default to host for inproc (back-compat), harbor for harbor mode.
+  const acceptanceSandbox: AcceptanceSandbox =
+    opts.acceptanceSandbox ??
+    (sandboxMode === "harbor" && harborImage !== undefined
+      ? { kind: "harbor", image: harborImage }
+      : { kind: "host" });
+
   // Acceptance evaluator (command-based; ignores LLM output)
   const baseEvaluator = makeAcceptanceEvaluator(
     spec.acceptanceCommand,
     workspaceRoot,
     spec.timeoutSeconds,
+    acceptanceSandbox,
   );
 
   // Track the last verdict for external inspection
@@ -153,37 +225,71 @@ export function buildSession(opts: SessionBuilderOptions): BuiltSession {
     providerId: provider.capabilities.id,
   });
 
-  // Kernel
-  // Use "free" reproducibility by default: the session is not pinned to
-  // deterministic outputs. Set to "record-replay" in the blueprint options
-  // when you want full reproducibility (requires a replayRecord in KernelDeps).
-  const kernel = new Kernel({
-    mode: "auto",
-    reproducibility: "free",
-    lineage: { maxDepth: 4 },
-    bus: { bufferSize: 512 },
-    roles: {
-      adjudicator: adjudicatorId,
-    },
-    trustMode: "explicit",
+  // Session-scoped tool registry (Critical #4: do NOT use the kernel's shared registry).
+  // Tools wrapped with auto-permission below are registered here only; they are
+  // invisible to other sessions or kernels that might reuse the same provider.
+  const sessionToolRegistry = new SessionToolRegistry();
+  sessionToolRegistry.register(withAutoPermission(makeFsReadTool(sandbox)));
+  sessionToolRegistry.register(withAutoPermission(makeFsWriteTool(sandbox)));
+  sessionToolRegistry.register(withAutoPermission(makeBashTool(sandbox)));
+
+  // CalibratedSurveillance: no-op probes for synthetic tasks (ceiling: trivial).
+  // Surveillance "active" profile means the hint loop fires before each step.
+  // This satisfies the ADR 0035 claim without running real provider probe calls.
+  // For production benches, run runProbesAsync() before buildSession to seed real data.
+  const surveillance = new CalibratedSurveillance({
+    maxDepth: 4,
+    // Pre-seed envelope with trivial ceiling — accurate for MockProvider.
+    // Real providers should call surveillance.runProbes(provider) or
+    // surveillance.runProbesAsync(provider) before session start.
+    envelope: new Map([
+      [provider.capabilities.id, { probeSuccessRate: 0.9, lastUpdatedAt: Date.now() }],
+    ]),
+    // Disable cost-overshoot-based decomposition for tbench sessions.
+    // The heuristic forecast (token-count-based) is not calibrated against
+    // the USD values in MockProvider scripts, producing spurious 100x+ overshots.
+    // Real billing decomposition decisions should use runProbesAsync() results
+    // and a cost-meter backed by real provider pricing.
+    disableCostOvershootDecompose: true,
   });
+  surveillance.runProbes(provider);
+
+  // KernelDeps — pass the session-scoped registry and surveillance.
+  const kernelDeps: KernelDeps = {
+    toolRegistry: sessionToolRegistry,
+    surveillance,
+    // ADR 0035: requireVerdictBeforeExit = true enforces that the Adjudicator
+    // actually issued a verdict before endSession() completes. This is cheap:
+    // the acceptance command already runs before endSession() is called.
+    verification: {
+      mode: "off",
+      requireVerdictBeforeExit: true,
+    },
+  };
+
+  // Kernel
+  const kernel = new Kernel(
+    {
+      mode: "auto",
+      reproducibility: "free",
+      lineage: { maxDepth: 4 },
+      bus: { bufferSize: 512 },
+      roles: {
+        adjudicator: adjudicatorId,
+      },
+      trustMode: "explicit",
+    },
+    kernelDeps,
+  );
 
   kernel.mountProvider(provider);
-
-  // Register tools scoped to workspace root.
-  // Wrap each tool with defaultMode:"auto" so the agent-runner does not emit
-  // human.request for fs.write and bash (which ship with defaultMode:"ask").
-  // The sandbox policy is the real authorization gate in eval context.
-  const registry = kernel.getToolRegistry();
-  registry.register(withAutoPermission(makeFsReadTool(sandbox)));
-  registry.register(withAutoPermission(makeFsWriteTool(sandbox)));
-  registry.register(withAutoPermission(makeBashTool(sandbox)));
+  kernel.mountSandbox(sandbox);
+  kernel.mountSurveillance(surveillance);
 
   kernel.setSession(sessionId, contractId);
 
   // Spawn the adjudicator agent spec on the kernel (registers it for verdict tracking)
   // We fire-and-forget: adjudicator agents don't run loops, they respond to bus events.
-  // Any spawn error is captured in the returned promise — callers may await it.
   void kernel.spawn(adjSpec);
 
   // Start adjudicator bus watching

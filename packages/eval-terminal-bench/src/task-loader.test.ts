@@ -162,6 +162,146 @@ difficulty: trivial
       expect(["E_TASK_PARSE", "E_TASK_VALIDATION"].includes(result.error.code)).toBe(true);
     }
   });
+
+  // ─── Path traversal security tests (Critical #1, High #11) ───────────────
+
+  it("rejects file key with '..' segment (path traversal)", () => {
+    const yaml = `
+id: path-escape-test
+title: Path traversal attempt
+repo:
+  kind: inline
+  files:
+    "../../../etc/passwd": "evil"
+goal: Test
+acceptanceCommand: echo ok
+timeoutSeconds: 30
+difficulty: trivial
+`;
+    const result = parseTaskSpec(yaml);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe("E_TASK_VALIDATION");
+      expect(result.error.message).toContain("..");
+    }
+  });
+
+  it("rejects file key that is an absolute path", () => {
+    const yaml = `
+id: abs-path-test
+title: Absolute path attempt
+repo:
+  kind: inline
+  files:
+    "/etc/passwd": "evil"
+goal: Test
+acceptanceCommand: echo ok
+timeoutSeconds: 30
+difficulty: trivial
+`;
+    const result = parseTaskSpec(yaml);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe("E_TASK_VALIDATION");
+    }
+  });
+
+  it("rejects empty-string file key", () => {
+    // YAML doesn't allow empty string keys unquoted; test with a whitespace key
+    // by passing through JSON directly
+    const json = JSON.stringify({
+      id: "empty-key-test",
+      title: "Empty key test",
+      repo: { kind: "inline", files: { "": "content" } },
+      goal: "Test",
+      acceptanceCommand: "echo ok",
+      timeoutSeconds: 30,
+      difficulty: "trivial",
+    });
+    const result = parseTaskSpec(json);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe("E_TASK_VALIDATION");
+    }
+  });
+
+  it("accepts valid nested file keys without '..'", () => {
+    const yaml = `
+id: valid-nested-test
+title: Valid nested paths
+repo:
+  kind: inline
+  files:
+    "src/utils/helper.py": "# ok"
+    "tests/unit/test_helper.py": "# ok"
+goal: Test
+acceptanceCommand: echo ok
+timeoutSeconds: 30
+difficulty: trivial
+`;
+    const result = parseTaskSpec(yaml);
+    expect(result.ok).toBe(true);
+  });
+
+  // ─── Git URL scheme security tests (High #14) ─────────────────────────────
+
+  it("rejects file:// git URL scheme", () => {
+    const yaml = `
+id: file-url-test
+title: File URL test
+repo:
+  kind: git
+  url: file:///path/to/malicious/repo
+  commit: abc123
+goal: Fix it
+acceptanceCommand: pytest
+timeoutSeconds: 60
+difficulty: small
+`;
+    const result = parseTaskSpec(yaml);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe("E_TASK_VALIDATION");
+      expect(result.error.message).toContain("https");
+    }
+  });
+
+  it("rejects ssh:// git URL scheme", () => {
+    const yaml = `
+id: ssh-url-test
+title: SSH URL test
+repo:
+  kind: git
+  url: ssh://git@github.com/example/repo.git
+  commit: abc123
+goal: Fix it
+acceptanceCommand: pytest
+timeoutSeconds: 60
+difficulty: small
+`;
+    const result = parseTaskSpec(yaml);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe("E_TASK_VALIDATION");
+    }
+  });
+
+  it("accepts https:// git URL", () => {
+    const yaml = `
+id: https-url-test
+title: HTTPS URL test
+repo:
+  kind: git
+  url: https://github.com/example/repo.git
+  commit: abc123
+goal: Fix it
+acceptanceCommand: pytest
+timeoutSeconds: 60
+difficulty: small
+`;
+    const result = parseTaskSpec(yaml);
+    expect(result.ok).toBe(true);
+  });
 });
 
 // ─── materializeTask ─────────────────────────────────────────────────────────
@@ -270,6 +410,33 @@ describe("materializeTask (inline)", () => {
         exists = false;
       }
       expect(exists).toBe(false);
+    }
+  });
+
+  it("rejects path-escape at materialize time (defense-in-depth)", async () => {
+    // Even if the Zod schema somehow passed, materializeTask must also reject
+    // paths that resolve outside the workspace. We bypass Zod here by casting.
+    const spec = {
+      id: "escape-defense-test",
+      title: "Path escape defense-in-depth",
+      repo: {
+        kind: "inline" as const,
+        // Force an unsafe path that bypasses the Zod refine (simulated)
+        files: {} as Record<string, string>,
+      },
+      goal: "Test",
+      acceptanceCommand: "echo ok",
+      timeoutSeconds: 30,
+      difficulty: "trivial" as const,
+    };
+    // Inject a malicious key directly (bypasses Zod schema validation)
+    // This tests the defense-in-depth path.resolve() check in materializeTask.
+    (spec.repo.files as Record<string, string>)["../escape-test.txt"] = "evil";
+
+    const result = await materializeTask(spec);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe("E_PATH_ESCAPE");
     }
   });
 });

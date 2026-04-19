@@ -25,6 +25,7 @@
     "@emerge/provider-mock": "workspace:*",
     "@emerge/sandbox-harbor": "workspace:*",
     "@emerge/sandbox-inproc": "workspace:*",
+    "@emerge/surveillance": "workspace:*",
     "@emerge/tools": "workspace:*",
     "@emerge/workspaces-git-worktree": "workspace:*",
     "yaml": "^2.6.1",

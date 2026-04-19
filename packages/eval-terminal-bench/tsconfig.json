@@ -13,6 +13,7 @@
     { "path": "../../packages/providers/mock" },
     { "path": "../../packages/sandbox-harbor" },
     { "path": "../../packages/sandbox-inproc" },
+    { "path": "../../packages/surveillance" },
     { "path": "../../packages/tools" },
     { "path": "../../packages/workspaces-git-worktree" }
   ]

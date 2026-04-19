@@ -9,7 +9,7 @@ export { parseTaskSpec, loadTask, materializeTask } from "./task-loader.js";
 export type { TaskSpec, LoadedTask } from "./task-loader.js";
 
 export { runAcceptance, makeAcceptanceEvaluator } from "./acceptance-runner.js";
-export type { AcceptanceResult } from "./acceptance-runner.js";
+export type { AcceptanceResult, AcceptanceSandbox } from "./acceptance-runner.js";
 
 export { buildSession } from "./session-builder.js";
 export type { BuiltSession, SessionBuilderOptions, SandboxMode } from "./session-builder.js";
