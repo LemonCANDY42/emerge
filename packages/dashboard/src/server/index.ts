@@ -1,5 +1,5 @@
 /**
- * @emerge/dashboard server — HTTP + WebSocket server.
+ * @lwrf42/emerge-dashboard server — HTTP + WebSocket server.
  *
  * Exposes startServer() for embedding in other processes and for the CLI.
  *
@@ -19,7 +19,7 @@ import { createReadStream, existsSync, statSync } from "node:fs";
 import { createServer } from "node:http";
 import { join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
-import type { JsonlEvent } from "@emerge/kernel/contracts";
+import type { JsonlEvent } from "@lwrf42/emerge-kernel/contracts";
 import { WebSocketServer } from "ws";
 import { createBridge } from "./bridge.js";
 import { readAllLines, tailFile } from "./tail.js";
@@ -304,7 +304,7 @@ function placeholderHtml(port: number): string {
 <body style="font-family:monospace;padding:2rem">
 <h1>emerge dashboard server is running on port ${port}</h1>
 <p>The browser client bundle has not been built yet.</p>
-<p>Run: <code>pnpm --filter @emerge/dashboard build:client</code></p>
+<p>Run: <code>pnpm --filter @lwrf42/emerge-dashboard build:client</code></p>
 <p>Then restart this server.</p>
 <p>WebSocket stream: <a href="ws://localhost:${port}">ws://localhost:${port}</a></p>
 </body>

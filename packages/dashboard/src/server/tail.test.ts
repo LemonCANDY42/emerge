@@ -5,8 +5,8 @@
 import { appendFileSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { JSONL_SCHEMA_VERSION } from "@emerge/kernel/contracts";
-import type { JsonlEvent } from "@emerge/kernel/contracts";
+import { JSONL_SCHEMA_VERSION } from "@lwrf42/emerge-kernel/contracts";
+import type { JsonlEvent } from "@lwrf42/emerge-kernel/contracts";
 import { describe, expect, it } from "vitest";
 import { readAllLines, tailFile } from "./tail.js";
 
@@ -15,8 +15,8 @@ function makeLifecycle(at: number): JsonlEvent {
     v: JSONL_SCHEMA_VERSION,
     type: "lifecycle",
     at,
-    agent: "agent-a" as import("@emerge/kernel/contracts").AgentId,
-    transition: "thinking" as import("@emerge/kernel/contracts").AgentState,
+    agent: "agent-a" as import("@lwrf42/emerge-kernel/contracts").AgentId,
+    transition: "thinking" as import("@lwrf42/emerge-kernel/contracts").AgentState,
   };
 }
 

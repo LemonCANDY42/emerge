@@ -1,4 +1,4 @@
-# @emerge/sandbox-inproc
+# @lwrf42/emerge-sandbox-inproc
 
 In-process sandbox with permission policy enforcement for the emerge agent harness.
 
@@ -7,13 +7,13 @@ v0.1.0 — early. See main repo for verified-vs-unverified surfaces.
 ## Install
 
 ```bash
-npm install @emerge/sandbox-inproc
+npm install @lwrf42/emerge-sandbox-inproc
 ```
 
 ## Quick example
 
 ```ts
-import { InProcSandbox } from "@emerge/sandbox-inproc";
+import { InProcSandbox } from "@lwrf42/emerge-sandbox-inproc";
 
 const sandbox = new InProcSandbox({
   workspaceRoot: "/tmp/my-task",
@@ -30,7 +30,7 @@ const kernel = new Kernel({ sandbox, provider, telemetry });
 - Unit/integration tests: deterministic, same process
 - Eval runs where speed matters more than container isolation
 
-For strong isolation, use `@emerge/sandbox-harbor` (Docker).
+For strong isolation, use `@lwrf42/emerge-sandbox-harbor` (Docker).
 
 ## Documentation
 

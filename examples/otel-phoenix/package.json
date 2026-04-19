@@ -1,5 +1,5 @@
 {
-  "name": "@emerge/example-otel-phoenix",
+  "name": "@lwrf42/emerge-example-otel-phoenix",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -18,9 +18,9 @@
     "@opentelemetry/semantic-conventions": "^1.30.0"
   },
   "dependencies": {
-    "@emerge/kernel": "workspace:*",
-    "@emerge/provider-mock": "workspace:*",
-    "@emerge/telemetry-otel": "workspace:*",
+    "@lwrf42/emerge-kernel": "workspace:*",
+    "@lwrf42/emerge-provider-mock": "workspace:*",
+    "@lwrf42/emerge-telemetry-otel": "workspace:*",
     "@opentelemetry/api": "^1.9.0"
   }
 }

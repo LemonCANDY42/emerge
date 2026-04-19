@@ -6,9 +6,9 @@
  * @vitest-environment jsdom
  */
 
-import type { AgentId } from "@emerge/kernel/contracts";
-import { EMPTY_STATE } from "@emerge/tui/state";
-import type { AgentNode, TuiState } from "@emerge/tui/state";
+import type { AgentId } from "@lwrf42/emerge-kernel/contracts";
+import { EMPTY_STATE } from "@lwrf42/emerge-tui/state";
+import type { AgentNode, TuiState } from "@lwrf42/emerge-tui/state";
 import { cleanup, render, screen } from "@testing-library/react";
 import React from "react";
 import { afterEach, describe, expect, it } from "vitest";

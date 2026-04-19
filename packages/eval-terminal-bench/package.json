@@ -1,5 +1,5 @@
 {
-  "name": "@emerge/eval-terminal-bench",
+  "name": "@lwrf42/emerge-eval-terminal-bench",
   "version": "0.1.0",
   "description": "Terminal-Bench task runner: task loader, session builder, blueprint, acceptance runner, and CLI for the emerge harness.",
   "license": "MIT",
@@ -37,14 +37,14 @@
     "node": ">=20"
   },
   "dependencies": {
-    "@emerge/agents": "workspace:^0.1.0",
-    "@emerge/kernel": "workspace:^0.1.0",
-    "@emerge/provider-mock": "workspace:^0.1.0",
-    "@emerge/sandbox-harbor": "workspace:^0.1.0",
-    "@emerge/sandbox-inproc": "workspace:^0.1.0",
-    "@emerge/surveillance": "workspace:^0.1.0",
-    "@emerge/tools": "workspace:^0.1.0",
-    "@emerge/workspaces-git-worktree": "workspace:^0.1.0",
+    "@lwrf42/emerge-agents": "workspace:^0.1.0",
+    "@lwrf42/emerge-kernel": "workspace:^0.1.0",
+    "@lwrf42/emerge-provider-mock": "workspace:^0.1.0",
+    "@lwrf42/emerge-sandbox-harbor": "workspace:^0.1.0",
+    "@lwrf42/emerge-sandbox-inproc": "workspace:^0.1.0",
+    "@lwrf42/emerge-surveillance": "workspace:^0.1.0",
+    "@lwrf42/emerge-tools": "workspace:^0.1.0",
+    "@lwrf42/emerge-workspaces-git-worktree": "workspace:^0.1.0",
     "yaml": "^2.6.1",
     "zod": "^3.24.2"
   },

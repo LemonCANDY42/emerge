@@ -12,7 +12,7 @@
  *   - "No verdicts yet" placeholder
  */
 
-import type { TuiState, VerdictEntry, VerdictKind } from "@emerge/tui/state";
+import type { TuiState, VerdictEntry, VerdictKind } from "@lwrf42/emerge-tui/state";
 import type React from "react";
 import { useState } from "react";
 

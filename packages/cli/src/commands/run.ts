@@ -9,11 +9,11 @@
  * The CLI is a zero-configuration entry point for mock-provider demos.
  */
 
-import type { AgentId, ContractId, SessionId } from "@emerge/kernel/contracts";
-import { Kernel } from "@emerge/kernel/runtime";
-import { MockProvider } from "@emerge/provider-mock";
-import { makeRecorder } from "@emerge/replay";
-import { JsonlTelemetry } from "@emerge/telemetry-jsonl";
+import type { AgentId, ContractId, SessionId } from "@lwrf42/emerge-kernel/contracts";
+import { Kernel } from "@lwrf42/emerge-kernel/runtime";
+import { MockProvider } from "@lwrf42/emerge-provider-mock";
+import { makeRecorder } from "@lwrf42/emerge-replay";
+import { JsonlTelemetry } from "@lwrf42/emerge-telemetry-jsonl";
 import { type BlueprintConfig, loadBlueprint } from "../blueprint.js";
 
 export interface RunCommandOptions {

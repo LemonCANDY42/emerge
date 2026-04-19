@@ -1,4 +1,4 @@
-# @emerge/modes
+# @lwrf42/emerge-modes
 
 Built-in operating modes and ModeRegistry for the emerge agent harness.
 
@@ -9,13 +9,13 @@ v0.1.0 — early. See main repo for verified-vs-unverified surfaces.
 ## Install
 
 ```bash
-npm install @emerge/modes
+npm install @lwrf42/emerge-modes
 ```
 
 ## Quick example
 
 ```ts
-import { ModeRegistry, builtinModes } from "@emerge/modes";
+import { ModeRegistry, builtinModes } from "@lwrf42/emerge-modes";
 
 const registry = new ModeRegistry();
 for (const mode of builtinModes) {

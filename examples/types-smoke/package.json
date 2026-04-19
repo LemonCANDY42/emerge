@@ -1,5 +1,5 @@
 {
-  "name": "@emerge/example-types-smoke",
+  "name": "@lwrf42/emerge-example-types-smoke",
   "version": "0.0.0",
   "private": true,
   "description": "Compile-time smoke test that every kernel contract type can be referenced and a sample value satisfies it.",
@@ -10,6 +10,6 @@
     "typecheck": "tsc -b"
   },
   "dependencies": {
-    "@emerge/kernel": "workspace:*"
+    "@lwrf42/emerge-kernel": "workspace:*"
   }
 }

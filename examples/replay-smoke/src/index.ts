@@ -15,12 +15,12 @@ import type {
   ProviderEvent,
   SessionId,
   SessionRecord,
-} from "@emerge/kernel/contracts";
-import { Kernel } from "@emerge/kernel/runtime";
-import { BuiltinModeRegistry, permissionPolicyForMode } from "@emerge/modes";
-import { MockProvider } from "@emerge/provider-mock";
-import { RecordedProvider, makeRecorder } from "@emerge/replay";
-import { InProcSandbox } from "@emerge/sandbox-inproc";
+} from "@lwrf42/emerge-kernel/contracts";
+import { Kernel } from "@lwrf42/emerge-kernel/runtime";
+import { BuiltinModeRegistry, permissionPolicyForMode } from "@lwrf42/emerge-modes";
+import { MockProvider } from "@lwrf42/emerge-provider-mock";
+import { RecordedProvider, makeRecorder } from "@lwrf42/emerge-replay";
+import { InProcSandbox } from "@lwrf42/emerge-sandbox-inproc";
 
 async function spawnAndRun(kernel: Kernel, agentId: AgentId): Promise<void> {
   const spawnResult = await kernel.spawn({
@@ -125,7 +125,7 @@ async function main() {
 
   // replayProviderFactory: called by Kernel.spawn() to wrap the raw provider in
   // a RecordedProvider.  The factory lives here (not in the kernel) to avoid a
-  // circular @emerge/kernel → @emerge/replay dependency.
+  // circular @lwrf42/emerge-kernel → @lwrf42/emerge-replay dependency.
   const replayProviderFactory = (rec: SessionRecord, original: Provider): Provider =>
     new RecordedProvider(rec, original.capabilities);
 

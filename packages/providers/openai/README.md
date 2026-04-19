@@ -1,4 +1,4 @@
-# @emerge/provider-openai
+# @lwrf42/emerge-provider-openai
 
 OpenAI provider adapter (chat and responses protocols) for the emerge agent harness.
 
@@ -7,13 +7,13 @@ v0.1.0 — early. Real-model verified against `gpt-5.4` via an OpenAI-compatible
 ## Install
 
 ```bash
-npm install @emerge/provider-openai
+npm install @lwrf42/emerge-provider-openai
 ```
 
 ## Quick example
 
 ```ts
-import { OpenAIProvider } from "@emerge/provider-openai";
+import { OpenAIProvider } from "@lwrf42/emerge-provider-openai";
 
 const provider = new OpenAIProvider({
   apiKey: process.env.OPENAI_API_KEY,

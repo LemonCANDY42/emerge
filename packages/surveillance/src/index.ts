@@ -1,5 +1,5 @@
 /**
- * @emerge/surveillance — CalibratedSurveillance implementation.
+ * @lwrf42/emerge-surveillance — CalibratedSurveillance implementation.
  *
  * Assesses model competence before each step and updates rolling
  * per-(providerId, difficulty) statistics after each step.
@@ -18,8 +18,8 @@ import type {
   StepProfile,
   Surveillance,
   ToolName,
-} from "@emerge/kernel/contracts";
-import type { ExperienceAware } from "@emerge/kernel/contracts";
+} from "@lwrf42/emerge-kernel/contracts";
+import type { ExperienceAware } from "@lwrf42/emerge-kernel/contracts";
 
 // Re-export the probe type (not in contracts, so we define it here)
 export interface Probe {

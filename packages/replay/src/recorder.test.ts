@@ -14,8 +14,8 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import type { ContractId, SessionId } from "@emerge/kernel/contracts";
-import type { JsonlEvent } from "@emerge/kernel/contracts";
+import type { ContractId, SessionId } from "@lwrf42/emerge-kernel/contracts";
+import type { JsonlEvent } from "@lwrf42/emerge-kernel/contracts";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { makeRecorder } from "./index.js";
 

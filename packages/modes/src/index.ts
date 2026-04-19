@@ -1,5 +1,5 @@
 /**
- * @emerge/modes — built-in mode registry with 6 default modes.
+ * @lwrf42/emerge-modes — built-in mode registry with 6 default modes.
  */
 
 import type {
@@ -9,7 +9,7 @@ import type {
   ModeRegistry,
   PermissionPolicy,
   ToolSurface,
-} from "@emerge/kernel/contracts";
+} from "@lwrf42/emerge-kernel/contracts";
 
 const fullAuto: PermissionPolicy = {
   fs: { read: "auto", write: "auto", delete: "auto" },
@@ -195,7 +195,7 @@ export function permissionPolicyForMode(registry: ModeRegistry, name: ModeName):
 export function permissionPolicyForModeResult(
   registry: ModeRegistry,
   name: ModeName,
-): import("@emerge/kernel/contracts").Result<PermissionPolicy> {
+): import("@lwrf42/emerge-kernel/contracts").Result<PermissionPolicy> {
   const mode = registry.resolve(name);
   if (!mode) {
     return {

@@ -1,4 +1,4 @@
-# @emerge/artifacts-local-fs
+# @lwrf42/emerge-artifacts-local-fs
 
 Local-filesystem artifact store for the emerge agent harness.
 
@@ -9,13 +9,13 @@ v0.1.0 — early. See main repo for verified-vs-unverified surfaces.
 ## Install
 
 ```bash
-npm install @emerge/artifacts-local-fs
+npm install @lwrf42/emerge-artifacts-local-fs
 ```
 
 ## Quick example
 
 ```ts
-import { LocalFsArtifactStore } from "@emerge/artifacts-local-fs";
+import { LocalFsArtifactStore } from "@lwrf42/emerge-artifacts-local-fs";
 
 const store = new LocalFsArtifactStore({
   root: "/tmp/emerge/artifacts",

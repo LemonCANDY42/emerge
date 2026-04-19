@@ -1,5 +1,5 @@
 {
-  "name": "@emerge/agents",
+  "name": "@lwrf42/emerge-agents",
   "version": "0.1.0",
   "description": "Topology helpers and agent roles (supervisor, worker, pool, pipeline, adjudicator) for the emerge harness.",
   "license": "MIT",
@@ -34,7 +34,7 @@
     "node": ">=20"
   },
   "dependencies": {
-    "@emerge/kernel": "workspace:^0.1.0"
+    "@lwrf42/emerge-kernel": "workspace:^0.1.0"
   },
   "devDependencies": {
     "@types/node": "^20.11.0"

@@ -1,4 +1,4 @@
-# @emerge/provider-anthropic
+# @lwrf42/emerge-provider-anthropic
 
 Anthropic Claude provider adapter for the emerge agent harness.
 
@@ -7,13 +7,13 @@ v0.1.0 — early. Shipped but not yet verified end-to-end with a real Anthropic 
 ## Install
 
 ```bash
-npm install @emerge/provider-anthropic
+npm install @lwrf42/emerge-provider-anthropic
 ```
 
 ## Quick example
 
 ```ts
-import { AnthropicProvider } from "@emerge/provider-anthropic";
+import { AnthropicProvider } from "@lwrf42/emerge-provider-anthropic";
 
 const provider = new AnthropicProvider({
   apiKey: process.env.ANTHROPIC_API_KEY,

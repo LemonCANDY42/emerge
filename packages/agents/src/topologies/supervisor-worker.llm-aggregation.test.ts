@@ -22,8 +22,8 @@ import type {
   Result,
   SessionId,
   ToolName,
-} from "@emerge/kernel/contracts";
-import { Kernel } from "@emerge/kernel/runtime";
+} from "@lwrf42/emerge-kernel/contracts";
+import { Kernel } from "@lwrf42/emerge-kernel/runtime";
 import { describe, expect, it } from "vitest";
 import { supervisorWorker } from "./supervisor-worker.js";
 
@@ -186,7 +186,7 @@ describe("C1/C2: supervisorWorker LLM aggregation — inbox fix", () => {
     const kernelLike = kernel as {
       spawn(spec: AgentSpec): Promise<Result<AgentHandle>>;
       runAgent(handle: AgentHandle): Promise<void>;
-      getBus(): import("@emerge/kernel/contracts").Bus;
+      getBus(): import("@lwrf42/emerge-kernel/contracts").Bus;
     };
 
     const runResult = await topologyResult.value.run("test input", kernelLike, sessionId);
@@ -265,7 +265,7 @@ describe("C1/C2: supervisorWorker LLM aggregation — inbox fix", () => {
     const kernelLike = kernel as {
       spawn(spec: AgentSpec): Promise<Result<AgentHandle>>;
       runAgent(handle: AgentHandle): Promise<void>;
-      getBus(): import("@emerge/kernel/contracts").Bus;
+      getBus(): import("@lwrf42/emerge-kernel/contracts").Bus;
     };
 
     await topologyResult.value.run("test input", kernelLike, sessionId);

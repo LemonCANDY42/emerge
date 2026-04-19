@@ -1,5 +1,5 @@
 {
-  "name": "@emerge/provider-openai-compat",
+  "name": "@lwrf42/emerge-provider-openai-compat",
   "version": "0.1.0",
   "description": "OpenAI-compatible provider adapter for Ollama, vLLM, llama.cpp, and other OpenAI-compatible endpoints.",
   "license": "MIT",
@@ -34,8 +34,8 @@
     "node": ">=20"
   },
   "dependencies": {
-    "@emerge/provider-openai": "workspace:^0.1.0",
-    "@emerge/kernel": "workspace:^0.1.0"
+    "@lwrf42/emerge-provider-openai": "workspace:^0.1.0",
+    "@lwrf42/emerge-kernel": "workspace:^0.1.0"
   },
   "devDependencies": {
     "@types/node": "^20.11.0"

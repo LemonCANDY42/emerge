@@ -1,5 +1,5 @@
 /**
- * @emerge/tools-mcp unit tests (C5, M1, M2).
+ * @lwrf42/emerge-tools-mcp unit tests (C5, M1, M2).
  *
  * Covers:
  *  C5: server name validation (/^[a-zA-Z0-9-]+$/) — invalid names return E_MCP_INVALID_SERVER_NAME
@@ -22,7 +22,7 @@ import type {
   Tool,
   ToolRegistry,
   ToolSpec,
-} from "@emerge/kernel/contracts";
+} from "@lwrf42/emerge-kernel/contracts";
 import { describe, expect, it } from "vitest";
 import { McpToolRegistry } from "./index.js";
 

@@ -15,7 +15,7 @@ The Responses API accepts a `reasoning` object with `effort` and optional `summa
 ### Config
 
 ```ts
-import { OpenAIProvider } from "@emerge/provider-openai";
+import { OpenAIProvider } from "@lwrf42/emerge-provider-openai";
 
 const provider = new OpenAIProvider({
   apiKey: "sk-...",
@@ -79,7 +79,7 @@ deltas stream as `ProviderEvent { type: "thinking_delta", text }`.
 ### Config
 
 ```ts
-import { AnthropicProvider } from "@emerge/provider-anthropic";
+import { AnthropicProvider } from "@lwrf42/emerge-provider-anthropic";
 
 const provider = new AnthropicProvider({
   apiKey: "sk-ant-...",
@@ -104,7 +104,7 @@ ANTHROPIC_THINKING_BUDGET=8192   # positive integer enables; absent or 0 disable
 
 ## OpenAI-compat — `extraParams` and `reasoning`
 
-**Any gateway using the `@emerge/provider-openai-compat` wrapper**
+**Any gateway using the `@lwrf42/emerge-provider-openai-compat` wrapper**
 
 The compat provider supports two mechanisms for passing extra fields:
 
@@ -113,7 +113,7 @@ The compat provider supports two mechanisms for passing extra fields:
    Use this for gateway-specific fields your endpoint accepts.
 
 ```ts
-import { OpenAICompatProvider } from "@emerge/provider-openai-compat";
+import { OpenAICompatProvider } from "@lwrf42/emerge-provider-openai-compat";
 
 const provider = new OpenAICompatProvider({
   name: "my-gateway",

@@ -10,13 +10,13 @@
 
 import fs from "node:fs";
 import readline from "node:readline";
-import type { AgentId, ContractId, SessionId } from "@emerge/kernel/contracts";
-import { type JsonlEvent, parseJsonlLine } from "@emerge/kernel/contracts";
-import type { ProviderEvent, RecordedEvent, SessionRecord } from "@emerge/kernel/contracts";
-import { Kernel } from "@emerge/kernel/runtime";
-import { MockProvider } from "@emerge/provider-mock";
-import type { MockScriptEntry } from "@emerge/provider-mock";
-import { RecordedProvider } from "@emerge/replay";
+import type { AgentId, ContractId, SessionId } from "@lwrf42/emerge-kernel/contracts";
+import { type JsonlEvent, parseJsonlLine } from "@lwrf42/emerge-kernel/contracts";
+import type { ProviderEvent, RecordedEvent, SessionRecord } from "@lwrf42/emerge-kernel/contracts";
+import { Kernel } from "@lwrf42/emerge-kernel/runtime";
+import { MockProvider } from "@lwrf42/emerge-provider-mock";
+import type { MockScriptEntry } from "@lwrf42/emerge-provider-mock";
+import { RecordedProvider } from "@lwrf42/emerge-replay";
 
 /**
  * Read all JSONL events from a file, skipping blank lines and lines that fail

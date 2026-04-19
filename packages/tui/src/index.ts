@@ -1,5 +1,5 @@
 /**
- * @emerge/tui — public API.
+ * @lwrf42/emerge-tui — public API.
  *
  * For the CLI (emerge-tui live/replay), use the bin at dist/cli.js.
  * For in-process embedding, use runTui() + makeTuiEventSource().

@@ -27,11 +27,11 @@
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { materializeTask } from "@emerge/eval-terminal-bench";
-import { makeTerminalBenchBlueprint } from "@emerge/eval-terminal-bench";
-import { runAcceptance } from "@emerge/eval-terminal-bench";
-import type { AgentId, ProviderEvent, SessionId } from "@emerge/kernel/contracts";
-import { MockProvider } from "@emerge/provider-mock";
+import { materializeTask } from "@lwrf42/emerge-eval-terminal-bench";
+import { makeTerminalBenchBlueprint } from "@lwrf42/emerge-eval-terminal-bench";
+import { runAcceptance } from "@lwrf42/emerge-eval-terminal-bench";
+import type { AgentId, ProviderEvent, SessionId } from "@lwrf42/emerge-kernel/contracts";
+import { MockProvider } from "@lwrf42/emerge-provider-mock";
 
 // ─── Task spec ───────────────────────────────────────────────────────────────
 

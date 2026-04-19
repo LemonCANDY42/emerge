@@ -11,8 +11,8 @@
 import { createReadStream } from "node:fs";
 import { stat, unwatchFile, watchFile } from "node:fs";
 import { createInterface } from "node:readline";
-import { parseJsonlLine } from "@emerge/kernel/contracts";
-import type { JsonlEvent } from "@emerge/kernel/contracts";
+import { parseJsonlLine } from "@lwrf42/emerge-kernel/contracts";
+import type { JsonlEvent } from "@lwrf42/emerge-kernel/contracts";
 
 const POLL_INTERVAL_MS = 250;
 

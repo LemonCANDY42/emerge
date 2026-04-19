@@ -19,7 +19,7 @@ import type {
   Result,
   SchemaRef,
   SlotBindings,
-} from "@emerge/kernel/contracts";
+} from "@lwrf42/emerge-kernel/contracts";
 
 export class BlueprintRegistry {
   private readonly blueprints = new Map<BlueprintId, AgentBlueprint>();

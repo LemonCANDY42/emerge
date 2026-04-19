@@ -21,8 +21,8 @@ import type {
   ProviderRequest,
   ReproducibilityTier,
   Result,
-} from "@emerge/kernel/contracts";
-export { defaultAdapter as mockSchemaAdapter } from "@emerge/kernel/runtime";
+} from "@lwrf42/emerge-kernel/contracts";
+export { defaultAdapter as mockSchemaAdapter } from "@lwrf42/emerge-kernel/runtime";
 
 export interface MockScriptEntry {
   /** Events emitted in order for this call. */

@@ -1,4 +1,4 @@
-# @emerge/agents
+# @lwrf42/emerge-agents
 
 Topology helpers and agent roles for the emerge harness: supervisor, worker, pool, pipeline, and adjudicator.
 
@@ -7,13 +7,13 @@ v0.1.0 — early. See main repo for verified-vs-unverified surfaces.
 ## Install
 
 ```bash
-npm install @emerge/agents
+npm install @lwrf42/emerge-agents
 ```
 
 ## Quick example
 
 ```ts
-import { supervisorWorker } from "@emerge/agents";
+import { supervisorWorker } from "@lwrf42/emerge-agents";
 
 // Build a supervisor-worker topology where the supervisor
 // decomposes a task and workers execute sub-tasks.

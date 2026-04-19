@@ -1,5 +1,5 @@
 /**
- * @emerge/experience-inmemory — In-memory ExperienceLibrary implementation.
+ * @lwrf42/emerge-experience-inmemory — In-memory ExperienceLibrary implementation.
  *
  * Provides hint/ingest/export/importBundle/get with:
  *   - Weighted similarity scoring (approach 0.6, taskType 0.3, semantic 0.1)
@@ -20,7 +20,7 @@ import type {
   HintBudget,
   HintQuery,
   Result,
-} from "@emerge/kernel/contracts";
+} from "@lwrf42/emerge-kernel/contracts";
 
 export interface InMemoryExperienceLibraryOptions {
   /**

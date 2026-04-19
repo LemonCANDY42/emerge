@@ -1,5 +1,5 @@
 {
-  "name": "@emerge/example-cli-hello",
+  "name": "@lwrf42/emerge-example-cli-hello",
   "version": "0.0.0",
   "private": true,
   "type": "module",

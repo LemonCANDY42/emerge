@@ -79,7 +79,7 @@ describe("M5: OpenAI Responses API — error event handling", () => {
     // Access the private client via cast — this is a white-box test
     (provider as unknown as { client: { responses?: unknown } }).client.responses = fakeResponses;
 
-    const events: import("@emerge/kernel/contracts").ProviderEvent[] = [];
+    const events: import("@lwrf42/emerge-kernel/contracts").ProviderEvent[] = [];
     for await (const event of provider.invoke({
       messages: [{ role: "system", content: "test" }],
     })) {
@@ -112,7 +112,7 @@ describe("M5: OpenAI Responses API — error event handling", () => {
 
     (provider as unknown as { client: { responses?: unknown } }).client.responses = fakeResponses;
 
-    const events: import("@emerge/kernel/contracts").ProviderEvent[] = [];
+    const events: import("@lwrf42/emerge-kernel/contracts").ProviderEvent[] = [];
     for await (const event of provider.invoke({
       messages: [{ role: "system", content: "test" }],
     })) {
@@ -142,7 +142,7 @@ describe("M5: OpenAI Responses API — error event handling", () => {
 
     (provider as unknown as { client: { responses?: unknown } }).client.responses = fakeResponses;
 
-    const events: import("@emerge/kernel/contracts").ProviderEvent[] = [];
+    const events: import("@lwrf42/emerge-kernel/contracts").ProviderEvent[] = [];
     for await (const event of provider.invoke({
       messages: [{ role: "system", content: "test" }],
     })) {

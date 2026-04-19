@@ -6,7 +6,7 @@
  * rooted under "(unknown parent)" rather than crashing.
  */
 
-import type { AgentId } from "@emerge/kernel/contracts";
+import type { AgentId } from "@lwrf42/emerge-kernel/contracts";
 import { Box, Text } from "ink";
 import type React from "react";
 import type { AgentNode, TuiState } from "../state/types.js";

@@ -1,5 +1,5 @@
 /**
- * @emerge/telemetry-otel — OpenTelemetry Telemetry implementation.
+ * @lwrf42/emerge-telemetry-otel — OpenTelemetry Telemetry implementation.
  *
  * Maps kernel spans → OTel spans:
  *   - SpanKind → OTel span name + `emerge.span.kind` attribute
@@ -15,7 +15,7 @@
  * Peer dependency: @opentelemetry/api >=1.6.0
  */
 
-import type { SpanEnd, SpanId, SpanStart, Telemetry } from "@emerge/kernel/contracts";
+import type { SpanEnd, SpanId, SpanStart, Telemetry } from "@lwrf42/emerge-kernel/contracts";
 import {
   type Context,
   type Span,

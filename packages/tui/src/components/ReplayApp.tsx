@@ -18,7 +18,7 @@
  * events — acceptable for Phase 1.
  */
 
-import type { JsonlEvent } from "@emerge/kernel/contracts";
+import type { JsonlEvent } from "@lwrf42/emerge-kernel/contracts";
 import { useApp, useInput } from "ink";
 import type React from "react";
 import { useCallback, useEffect, useState } from "react";

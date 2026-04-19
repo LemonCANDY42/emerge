@@ -1,4 +1,4 @@
-# @emerge/replay
+# @lwrf42/emerge-replay
 
 Session recorder and deterministic replayer for the emerge agent harness.
 
@@ -9,13 +9,13 @@ v0.1.0 — early. Replay reproducibility verified end-to-end — see VERIFICATIO
 ## Install
 
 ```bash
-npm install @emerge/replay
+npm install @lwrf42/emerge-replay
 ```
 
 ## Quick example — record
 
 ```ts
-import { SessionRecorder } from "@emerge/replay";
+import { SessionRecorder } from "@lwrf42/emerge-replay";
 
 const recorder = new SessionRecorder({ path: "/tmp/session.jsonl" });
 const recordingProvider = recorder.wrap(realProvider);
@@ -30,7 +30,7 @@ await recorder.flush();
 ## Quick example — replay
 
 ```ts
-import { ReplayProvider } from "@emerge/replay";
+import { ReplayProvider } from "@lwrf42/emerge-replay";
 
 const replayProvider = new ReplayProvider({ path: "/tmp/session.jsonl" });
 

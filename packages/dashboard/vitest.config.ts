@@ -4,7 +4,7 @@
  * The root vitest.config.ts uses environment:"node" which is correct for all
  * other packages. The dashboard client tests require jsdom for DOM APIs.
  *
- * This config is used by: pnpm --filter @emerge/dashboard test
+ * This config is used by: pnpm --filter @lwrf42/emerge-dashboard test
  * The root config picks up server tests (*.test.ts) which run in node environment.
  */
 

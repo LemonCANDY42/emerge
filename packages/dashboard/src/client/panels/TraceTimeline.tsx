@@ -17,8 +17,8 @@
  * Hover: a side drawer shows the full event payload as pretty-printed JSON.
  */
 
-import type { AgentId, JsonlEvent } from "@emerge/kernel/contracts";
-import type { TuiState } from "@emerge/tui/state";
+import type { AgentId, JsonlEvent } from "@lwrf42/emerge-kernel/contracts";
+import type { TuiState } from "@lwrf42/emerge-tui/state";
 import type React from "react";
 import { useState } from "react";
 

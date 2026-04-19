@@ -1,4 +1,4 @@
-# @emerge/workspaces-git-worktree
+# @lwrf42/emerge-workspaces-git-worktree
 
 Git worktree and scoped temporary directory workspace managers for the emerge agent harness.
 
@@ -9,13 +9,13 @@ v0.1.0 — early. See main repo for verified-vs-unverified surfaces.
 ## Install
 
 ```bash
-npm install @emerge/workspaces-git-worktree
+npm install @lwrf42/emerge-workspaces-git-worktree
 ```
 
 ## Quick example
 
 ```ts
-import { GitWorktreeWorkspace, ScopedTmpWorkspace } from "@emerge/workspaces-git-worktree";
+import { GitWorktreeWorkspace, ScopedTmpWorkspace } from "@lwrf42/emerge-workspaces-git-worktree";
 
 // Git worktree — each agent branch gets its own working tree.
 const workspace = await GitWorktreeWorkspace.create({

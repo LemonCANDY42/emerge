@@ -60,7 +60,7 @@ None of these are currently achievable with the single-invocation `bash` tool.
 
 Implement ADR 0036 when:
 
-1. `@emerge/sandbox-harbor` lands — the planned M4-prep sandboxing package that
+1. `@lwrf42/emerge-sandbox-harbor` lands — the planned M4-prep sandboxing package that
    wraps persistent shell / Docker primitives. That package is the natural home for
    a persistent shell tool and the sentinel-polling logic.
 2. The `bash` tool is replaced or supplemented with a spawn-and-monitor variant.
@@ -78,7 +78,7 @@ At that point, the implementation is straightforward:
 - No wall-clock recovery for long-running commands in the current codebase.
 - Existing TB 2.0 scores under the current `execAsync` model are unaffected (the
   command timeout is the ceiling, which is already configurable).
-- When `@emerge/sandbox-harbor` lands, this ADR is the implementation brief.
+- When `@lwrf42/emerge-sandbox-harbor` lands, this ADR is the implementation brief.
   Estimated cost at that point: small (sentinel injection + poll-exit + strip).
 
 ## Reference implementation

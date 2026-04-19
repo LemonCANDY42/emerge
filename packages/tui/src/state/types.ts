@@ -5,7 +5,7 @@
  * No React imports here — these types are usable in tests without Ink.
  */
 
-import type { AgentId, AgentState } from "@emerge/kernel/contracts";
+import type { AgentId, AgentState } from "@lwrf42/emerge-kernel/contracts";
 
 // ─── Agent lifecycle state ────────────────────────────────────────────────────
 

@@ -13,7 +13,7 @@
  *   - score-zero matches are excluded from hint results
  */
 
-import type { Experience, ExperienceId, SessionId } from "@emerge/kernel/contracts";
+import type { Experience, ExperienceId, SessionId } from "@lwrf42/emerge-kernel/contracts";
 import { describe, expect, it } from "vitest";
 import { InMemoryExperienceLibrary } from "./index.js";
 

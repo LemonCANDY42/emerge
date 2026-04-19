@@ -64,8 +64,8 @@ const criticSpec: AgentSpec = {
 ## SDK integration (emerge-as-client)
 
 ```typescript
-import { buildAdjudicator } from "@emerge/agents";
-import type { EvaluationInput, Verdict, Contract } from "@emerge/kernel/contracts";
+import { buildAdjudicator } from "@lwrf42/emerge-agents";
+import type { EvaluationInput, Verdict, Contract } from "@lwrf42/emerge-kernel/contracts";
 
 const contract: Contract = {
   id: "essay-contract" as ContractId,
@@ -258,7 +258,7 @@ evaluate: async (input: EvaluationInput): Promise<Verdict> => {
 ## Minimal invocation
 
 ```typescript
-import type { ContractId, AgentId } from "@emerge/kernel/contracts";
+import type { ContractId, AgentId } from "@lwrf42/emerge-kernel/contracts";
 
 const adj = buildAdjudicator({
   id: "critic" as AgentId,

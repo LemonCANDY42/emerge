@@ -1,5 +1,5 @@
 {
-  "name": "@emerge/dashboard",
+  "name": "@lwrf42/emerge-dashboard",
   "version": "0.1.0",
   "description": "Vite+React+WebSocket browser dashboard for monitoring emerge agent sessions in real time or replay.",
   "license": "MIT",
@@ -38,8 +38,8 @@
     "node": ">=20"
   },
   "dependencies": {
-    "@emerge/kernel": "workspace:^0.1.0",
-    "@emerge/tui": "workspace:^0.1.0",
+    "@lwrf42/emerge-kernel": "workspace:^0.1.0",
+    "@lwrf42/emerge-tui": "workspace:^0.1.0",
     "commander": "^12.1.0",
     "ws": "^8.18.0"
   },

@@ -1,4 +1,4 @@
-# @emerge/dashboard
+# @lwrf42/emerge-dashboard
 
 Browser-based monitor for emerge agent sessions. Streams JSONL events over WebSocket to a React+Vite client.
 
@@ -7,13 +7,13 @@ v0.1.0 — early. Dashboard verified via vitest server-side + jsdom client-side 
 ## Install
 
 ```bash
-npm install -g @emerge/dashboard
+npm install -g @lwrf42/emerge-dashboard
 ```
 
 Or run without installing:
 
 ```bash
-npx @emerge/dashboard --session .emerge/session.jsonl
+npx @lwrf42/emerge-dashboard --session .emerge/session.jsonl
 ```
 
 ## Security model
@@ -67,10 +67,10 @@ See [docs/cli/dashboard.md](../../docs/cli/dashboard.md) for CLI flag reference 
 
 ```bash
 # Server (TypeScript)
-pnpm --filter @emerge/dashboard build
+pnpm --filter @lwrf42/emerge-dashboard build
 
 # Client (Vite)
-pnpm --filter @emerge/dashboard build:client
+pnpm --filter @lwrf42/emerge-dashboard build:client
 ```
 
 ## Running

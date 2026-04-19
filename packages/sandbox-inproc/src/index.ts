@@ -10,7 +10,7 @@ import type {
   SandboxDecision,
   SandboxRequest,
   ToolEffect,
-} from "@emerge/kernel/contracts";
+} from "@lwrf42/emerge-kernel/contracts";
 
 function effectToPermScope(
   effect: ToolEffect,

@@ -23,10 +23,10 @@ import type {
   ProviderCapabilities,
   ProviderEvent,
   SessionId,
-} from "@emerge/kernel/contracts";
-import { Kernel } from "@emerge/kernel/runtime";
-import { MockProvider } from "@emerge/provider-mock";
-import { CalibratedSurveillance } from "@emerge/surveillance";
+} from "@lwrf42/emerge-kernel/contracts";
+import { Kernel } from "@lwrf42/emerge-kernel/runtime";
+import { MockProvider } from "@lwrf42/emerge-provider-mock";
+import { CalibratedSurveillance } from "@lwrf42/emerge-surveillance";
 
 async function main() {
   console.log("=== weak-model-decomposition demo ===\n");

@@ -67,5 +67,5 @@ derived object created at call time.
 - New providers require only a new adapter mounted at startup — no changes to
   tool definitions.
 - `SchemaAdapterRegistry`, `defaultAdapter`, `anthropicAdapter`, and
-  `openaiAdapter` are exported from `@emerge/kernel/runtime` for use by
+  `openaiAdapter` are exported from `@lwrf42/emerge-kernel/runtime` for use by
   provider packages.

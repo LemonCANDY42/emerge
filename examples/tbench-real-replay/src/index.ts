@@ -35,11 +35,11 @@ import {
   makeTerminalBenchBlueprint,
   materializeTask,
   runAcceptance,
-} from "@emerge/eval-terminal-bench";
-import type { Provider, SessionRecord } from "@emerge/kernel/contracts";
-import { OpenAIProvider, openaiSchemaAdapter } from "@emerge/provider-openai";
-import type { OpenAIProtocol, OpenAIReasoningConfig } from "@emerge/provider-openai";
-import { RecordedProvider, makeRecorder } from "@emerge/replay";
+} from "@lwrf42/emerge-eval-terminal-bench";
+import type { Provider, SessionRecord } from "@lwrf42/emerge-kernel/contracts";
+import { OpenAIProvider, openaiSchemaAdapter } from "@lwrf42/emerge-provider-openai";
+import type { OpenAIProtocol, OpenAIReasoningConfig } from "@lwrf42/emerge-provider-openai";
+import { RecordedProvider, makeRecorder } from "@lwrf42/emerge-replay";
 
 // ─── Task spec (identical to tbench-real-inline Task A) ─────────────────────
 

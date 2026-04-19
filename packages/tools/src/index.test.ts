@@ -1,5 +1,5 @@
 /**
- * @emerge/tools — unit tests for FS tools with baseDir constraint.
+ * @lwrf42/emerge-tools — unit tests for FS tools with baseDir constraint.
  *
  * Tests verify:
  *   - Default behavior (no baseDir) passes through paths unchanged.
@@ -19,7 +19,7 @@ import type {
   Sandbox,
   SandboxDecision,
   SandboxRequest,
-} from "@emerge/kernel/contracts";
+} from "@lwrf42/emerge-kernel/contracts";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { makeFsReadTool, makeFsWriteTool } from "./index.js";
 

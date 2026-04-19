@@ -19,11 +19,11 @@ import type {
   ProviderEvent,
   SessionId,
   SessionRecord,
-} from "@emerge/kernel/contracts";
-import { Kernel } from "@emerge/kernel/runtime";
-import type { MockScriptEntry } from "@emerge/provider-mock";
-import { MockProvider } from "@emerge/provider-mock";
-import { RecordedProvider } from "@emerge/replay";
+} from "@lwrf42/emerge-kernel/contracts";
+import { Kernel } from "@lwrf42/emerge-kernel/runtime";
+import type { MockScriptEntry } from "@lwrf42/emerge-provider-mock";
+import { MockProvider } from "@lwrf42/emerge-provider-mock";
+import { RecordedProvider } from "@lwrf42/emerge-replay";
 import { describe, expect, it } from "vitest";
 
 function makeMinimalRecord(sessionId: SessionId, contractId: ContractId): SessionRecord {

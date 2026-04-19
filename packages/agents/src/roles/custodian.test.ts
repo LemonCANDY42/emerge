@@ -22,7 +22,7 @@ import type {
   RecallScope,
   Result,
   SchemaRef,
-} from "@emerge/kernel/contracts";
+} from "@lwrf42/emerge-kernel/contracts";
 import { describe, expect, it } from "vitest";
 import { buildCustodian } from "./custodian.js";
 

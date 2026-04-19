@@ -1,5 +1,5 @@
 /**
- * @emerge/sandbox-harbor — Docker-backed Sandbox implementation.
+ * @lwrf42/emerge-sandbox-harbor — Docker-backed Sandbox implementation.
  *
  * Delegates shell execution to a Docker container. Each run() call for
  * process_spawn effects executes inside a fresh container started from
@@ -30,7 +30,7 @@
  *
  * Requirements: Docker must be installed and running. If the `docker`
  * binary is not found, authorize() returns a clear error and run() never
- * starts a container. See @emerge/sandbox-inproc for a Docker-free option.
+ * starts a container. See @lwrf42/emerge-sandbox-inproc for a Docker-free option.
  */
 
 import { execFileSync, spawn } from "node:child_process";
@@ -45,7 +45,7 @@ import type {
   SandboxDecision,
   SandboxRequest,
   ToolEffect,
-} from "@emerge/kernel/contracts";
+} from "@lwrf42/emerge-kernel/contracts";
 
 // ─── Options ────────────────────────────────────────────────────────────────
 

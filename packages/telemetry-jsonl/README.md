@@ -1,4 +1,4 @@
-# @emerge/telemetry-jsonl
+# @lwrf42/emerge-telemetry-jsonl
 
 JSONL-backed telemetry writer for the emerge agent harness.
 
@@ -9,13 +9,13 @@ v0.1.0 — early. See main repo for verified-vs-unverified surfaces.
 ## Install
 
 ```bash
-npm install @emerge/telemetry-jsonl
+npm install @lwrf42/emerge-telemetry-jsonl
 ```
 
 ## Quick example
 
 ```ts
-import { JsonlTelemetry } from "@emerge/telemetry-jsonl";
+import { JsonlTelemetry } from "@lwrf42/emerge-telemetry-jsonl";
 
 const telemetry = new JsonlTelemetry({ path: "/tmp/emerge/session.jsonl" });
 
@@ -34,7 +34,7 @@ Each line is a self-contained JSON envelope:
 {"t":"2026-04-18T12:00:01.200Z","kind":"llm:response","agentId":"agent-1","payload":{...}}
 ```
 
-The JSONL file can be tailed live with `@emerge/tui` or loaded into `@emerge/dashboard`.
+The JSONL file can be tailed live with `@lwrf42/emerge-tui` or loaded into `@lwrf42/emerge-dashboard`.
 
 ## Documentation
 

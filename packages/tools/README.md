@@ -1,4 +1,4 @@
-# @emerge/tools
+# @lwrf42/emerge-tools
 
 Tool registry, filesystem and bash tools, and tool composition utilities for the emerge agent harness.
 
@@ -7,13 +7,13 @@ v0.1.0 — early. See main repo for verified-vs-unverified surfaces.
 ## Install
 
 ```bash
-npm install @emerge/tools
+npm install @lwrf42/emerge-tools
 ```
 
 ## Quick example
 
 ```ts
-import { makeFsReadTool, makeFsWriteTool, makeBashTool } from "@emerge/tools";
+import { makeFsReadTool, makeFsWriteTool, makeBashTool } from "@lwrf42/emerge-tools";
 
 const tools = [
   makeFsReadTool({ sandbox }),

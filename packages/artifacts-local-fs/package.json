@@ -1,5 +1,5 @@
 {
-  "name": "@emerge/artifacts-local-fs",
+  "name": "@lwrf42/emerge-artifacts-local-fs",
   "version": "0.1.0",
   "description": "Local-filesystem artifact store for the emerge agent harness.",
   "license": "MIT",
@@ -34,7 +34,7 @@
     "node": ">=20"
   },
   "dependencies": {
-    "@emerge/kernel": "workspace:^0.1.0"
+    "@lwrf42/emerge-kernel": "workspace:^0.1.0"
   },
   "devDependencies": {
     "@types/node": "^20.11.0"

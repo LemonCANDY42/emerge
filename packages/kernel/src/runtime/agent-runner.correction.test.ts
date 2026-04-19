@@ -423,7 +423,7 @@ describe("M3c2 finding #4: corrected input propagates to assistant message and r
     const tool = makeCountedActionTool(received);
     const provider = makeScriptedProvider("mock", [TOOL_CALL_SCRIPT, FINISH_SCRIPT]);
 
-    // Minimal inline recorder to capture tool_call events without importing @emerge/replay.
+    // Minimal inline recorder to capture tool_call events without importing @lwrf42/emerge-replay.
     const recordedEvents: import("../contracts/index.js").RecordedEvent[] = [];
     const inlineRecorder: import("../contracts/index.js").SessionRecorder = {
       start(_sid, _contract) {

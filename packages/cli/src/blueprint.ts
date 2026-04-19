@@ -11,7 +11,7 @@
  */
 
 import fs from "node:fs/promises";
-import type { Result } from "@emerge/kernel/contracts";
+import type { Result } from "@lwrf42/emerge-kernel/contracts";
 import { parse as parseYaml } from "yaml";
 import { z } from "zod";
 

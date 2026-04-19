@@ -1,5 +1,5 @@
 /**
- * Compile-time smoke test for @emerge/kernel contracts.
+ * Compile-time smoke test for @lwrf42/emerge-kernel contracts.
  *
  * Constructs a sample value for every public type. If a contract changes in
  * a breaking way, this file fails to typecheck — which fails CI. The values
@@ -131,7 +131,7 @@ import type {
   Verdict,
   Workspace,
   WorkspaceManager,
-} from "@emerge/kernel/contracts";
+} from "@lwrf42/emerge-kernel/contracts";
 
 // Branded id helpers (cast through unknown to keep callers honest).
 const id = <T>(s: string) => s as unknown as T;

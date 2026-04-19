@@ -7,8 +7,8 @@
 
 import fs from "node:fs";
 import path from "node:path";
-import type { SpanEnd, SpanId, SpanStart, Telemetry } from "@emerge/kernel/contracts";
-import { spanEndEvent, spanEventEvent, spanStartEvent } from "@emerge/kernel/contracts";
+import type { SpanEnd, SpanId, SpanStart, Telemetry } from "@lwrf42/emerge-kernel/contracts";
+import { spanEndEvent, spanEventEvent, spanStartEvent } from "@lwrf42/emerge-kernel/contracts";
 
 export class JsonlTelemetry implements Telemetry {
   private readonly filePath: string;

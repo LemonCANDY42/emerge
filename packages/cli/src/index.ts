@@ -1,5 +1,5 @@
 /**
- * @emerge/cli — public API surface for programmatic use.
+ * @lwrf42/emerge-cli — public API surface for programmatic use.
  *
  * Most users invoke the CLI via `emerge run`, `emerge replay`, etc.
  * This module exposes the same commands as importable functions for

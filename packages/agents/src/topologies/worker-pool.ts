@@ -20,7 +20,7 @@ import type {
   Topology,
   TopologyEdge,
   TopologyMember,
-} from "@emerge/kernel/contracts";
+} from "@lwrf42/emerge-kernel/contracts";
 import type { SubTask } from "./supervisor-worker.js";
 import type { KernelLike } from "./supervisor-worker.js";
 

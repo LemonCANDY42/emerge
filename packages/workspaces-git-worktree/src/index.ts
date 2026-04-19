@@ -27,7 +27,7 @@ import type {
   WorkspaceId,
   WorkspaceManager,
   WorkspaceStatus,
-} from "@emerge/kernel/contracts";
+} from "@lwrf42/emerge-kernel/contracts";
 
 let _wsCounter = 0;
 function newWorkspaceId(): WorkspaceId {

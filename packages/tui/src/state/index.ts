@@ -1,8 +1,8 @@
 /**
- * @emerge/tui/state — public sub-path export.
+ * @lwrf42/emerge-tui/state — public sub-path export.
  *
  * Re-exports the pure reducer and types so downstream packages (e.g.
- * @emerge/dashboard) can share the exact same state derivation without
+ * @lwrf42/emerge-dashboard) can share the exact same state derivation without
  * duplicating logic or importing Ink/React.
  *
  * Only pure TypeScript here — no Ink, no React, no side-effects.

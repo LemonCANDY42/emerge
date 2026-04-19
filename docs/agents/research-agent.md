@@ -15,8 +15,8 @@ Read-heavy agent for gathering information, fetching documents, summarizing find
 Core config for a research agent spawned inside emerge:
 
 ```typescript
-import type { AgentSpec, SurveillanceProfile } from "@emerge/kernel/contracts";
-import type { ProviderId } from "@emerge/kernel/contracts";
+import type { AgentSpec, SurveillanceProfile } from "@lwrf42/emerge-kernel/contracts";
+import type { ProviderId } from "@lwrf42/emerge-kernel/contracts";
 
 const researchAgentSpec: AgentSpec = {
   // Identity
@@ -115,12 +115,12 @@ Be thorough. Do not make up data. When uncertain, say so.`
 Minimal example: embed a research agent in a TypeScript app.
 
 ```typescript
-import { Kernel } from "@emerge/kernel/runtime";
-import { MockProvider } from "@emerge/provider-mock";
-import { makeFsReadTool } from "@emerge/tools";
-import { InProcSandbox } from "@emerge/sandbox-inproc";
-import { BuiltinModeRegistry, permissionPolicyForMode } from "@emerge/modes";
-import type { AgentId, SessionId } from "@emerge/kernel/contracts";
+import { Kernel } from "@lwrf42/emerge-kernel/runtime";
+import { MockProvider } from "@lwrf42/emerge-provider-mock";
+import { makeFsReadTool } from "@lwrf42/emerge-tools";
+import { InProcSandbox } from "@lwrf42/emerge-sandbox-inproc";
+import { BuiltinModeRegistry, permissionPolicyForMode } from "@lwrf42/emerge-modes";
+import type { AgentId, SessionId } from "@lwrf42/emerge-kernel/contracts";
 
 async function runResearchTask(goal: string, documentPath: string) {
   // 1. Set up the kernel
@@ -266,7 +266,7 @@ if (result.ok) {
 
 4. **Summarization becomes noise** — Provide a clear summary format in the system prompt: "Use this exact format: FINDING: [claim]. SOURCE: [file/url]. CONFIDENCE: [high/medium/low]."
 
-5. **Web fetching not wired** — Research agents need MCP tools (web search, API calls). Use `@emerge/tools-mcp` to wrap MCP servers; see [planned: M3c2 for bundled web/API tools].
+5. **Web fetching not wired** — Research agents need MCP tools (web search, API calls). Use `@lwrf42/emerge-tools-mcp` to wrap MCP servers; see [planned: M3c2 for bundled web/API tools].
 
 ## Minimal invocation
 

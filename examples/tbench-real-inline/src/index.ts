@@ -26,9 +26,9 @@ import {
   makeTerminalBenchBlueprint,
   materializeTask,
   runAcceptance,
-} from "@emerge/eval-terminal-bench";
-import { OpenAIProvider, openaiSchemaAdapter } from "@emerge/provider-openai";
-import type { OpenAIProtocol, OpenAIReasoningConfig } from "@emerge/provider-openai";
+} from "@lwrf42/emerge-eval-terminal-bench";
+import { OpenAIProvider, openaiSchemaAdapter } from "@lwrf42/emerge-provider-openai";
+import type { OpenAIProtocol, OpenAIReasoningConfig } from "@lwrf42/emerge-provider-openai";
 
 // ─── Task spec (identical to tbench-smoke-inline Task A) ─────────────────────
 

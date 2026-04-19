@@ -1,5 +1,5 @@
 {
-  "name": "@emerge/example-replay-smoke",
+  "name": "@lwrf42/emerge-example-replay-smoke",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -14,10 +14,10 @@
     "@types/node": "^20.11.0"
   },
   "dependencies": {
-    "@emerge/kernel": "workspace:*",
-    "@emerge/provider-mock": "workspace:*",
-    "@emerge/sandbox-inproc": "workspace:*",
-    "@emerge/modes": "workspace:*",
-    "@emerge/replay": "workspace:*"
+    "@lwrf42/emerge-kernel": "workspace:*",
+    "@lwrf42/emerge-provider-mock": "workspace:*",
+    "@lwrf42/emerge-sandbox-inproc": "workspace:*",
+    "@lwrf42/emerge-modes": "workspace:*",
+    "@lwrf42/emerge-replay": "workspace:*"
   }
 }

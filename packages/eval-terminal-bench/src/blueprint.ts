@@ -13,11 +13,11 @@
  *   - maxIterations: 20 (enough for small bugfix tasks)
  */
 
-import type { AgentSpec, Budget } from "@emerge/kernel/contracts";
+import type { AgentSpec, Budget } from "@lwrf42/emerge-kernel/contracts";
 import type { BuiltSession } from "./session-builder.js";
 import { type SessionBuilderOptions, buildSession } from "./session-builder.js";
 // SchemaAdapter re-exported for blueprint consumers who need to type their adapter arg.
-export type { SchemaAdapter } from "@emerge/kernel/runtime";
+export type { SchemaAdapter } from "@lwrf42/emerge-kernel/runtime";
 
 export interface TerminalBenchBlueprintOptions extends SessionBuilderOptions {
   /** Override maximum agent iterations. Default: 20. */

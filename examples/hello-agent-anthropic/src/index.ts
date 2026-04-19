@@ -21,14 +21,14 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import type { AgentId, SessionId } from "@emerge/kernel/contracts";
-import { Kernel } from "@emerge/kernel/runtime";
-import { BuiltinModeRegistry, permissionPolicyForMode } from "@emerge/modes";
-import type { AnthropicThinkingConfig } from "@emerge/provider-anthropic";
-import { AnthropicProvider, anthropicSchemaAdapter } from "@emerge/provider-anthropic";
-import { makeRecorder } from "@emerge/replay";
-import { InProcSandbox } from "@emerge/sandbox-inproc";
-import { makeFsReadTool, makeFsWriteTool } from "@emerge/tools";
+import type { AgentId, SessionId } from "@lwrf42/emerge-kernel/contracts";
+import { Kernel } from "@lwrf42/emerge-kernel/runtime";
+import { BuiltinModeRegistry, permissionPolicyForMode } from "@lwrf42/emerge-modes";
+import type { AnthropicThinkingConfig } from "@lwrf42/emerge-provider-anthropic";
+import { AnthropicProvider, anthropicSchemaAdapter } from "@lwrf42/emerge-provider-anthropic";
+import { makeRecorder } from "@lwrf42/emerge-replay";
+import { InProcSandbox } from "@lwrf42/emerge-sandbox-inproc";
+import { makeFsReadTool, makeFsWriteTool } from "@lwrf42/emerge-tools";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const readmePath = path.join(__dirname, "../../README.md");

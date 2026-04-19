@@ -44,5 +44,5 @@ implement them. We need:
 - Anyone with Node 20.11+ and pnpm can build.
 - We pay a small "two configs per package" tax (`package.json` + `tsconfig.json`).
 - Project references mean `tsc -b` is incremental; no separate build tool needed.
-- Publishing strategy: each `@emerge/*` package independently versioned,
+- Publishing strategy: each `@lwrf42/emerge-*` package independently versioned,
   scoped public.

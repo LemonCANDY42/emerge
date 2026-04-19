@@ -99,7 +99,7 @@ export interface KernelDeps {
   /**
    * Used when reproducibility === "record-replay".
    *
-   * The kernel cannot depend on @emerge/replay (circular dep).  Instead the
+   * The kernel cannot depend on @lwrf42/emerge-replay (circular dep).  Instead the
    * caller passes a pre-constructed SessionRecord that the kernel uses to
    * build a Provider wrapper via `replayProviderFactory`.  If only
    * `replayRecord` is provided and no `replayProviderFactory`, the kernel
@@ -107,7 +107,7 @@ export interface KernelDeps {
    *
    * Typical usage (from examples/replay-smoke):
    *
-   *   import { RecordedProvider } from "@emerge/replay";
+   *   import { RecordedProvider } from "@lwrf42/emerge-replay";
    *   deps.replayRecord = record;
    *   deps.replayProviderFactory = (rec, caps) => new RecordedProvider(rec, caps);
    */
@@ -115,7 +115,7 @@ export interface KernelDeps {
   /**
    * Factory that wraps a SessionRecord + original ProviderCapabilities into a
    * replay-faithful Provider.  Supplied by the caller so the kernel stays
-   * free of @emerge/replay as a runtime dependency.
+   * free of @lwrf42/emerge-replay as a runtime dependency.
    */
   replayProviderFactory?:
     | ((record: SessionRecord, originalProvider: Provider) => Provider)

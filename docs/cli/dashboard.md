@@ -1,6 +1,6 @@
 # emerge dashboard CLI
 
-The `emerge dashboard` subcommand launches a browser-based monitor for agent sessions. It shells out to the `emerge-dashboard` binary shipped by `@emerge/dashboard`.
+The `emerge dashboard` subcommand launches a browser-based monitor for agent sessions. It shells out to the `emerge-dashboard` binary shipped by `@lwrf42/emerge-dashboard`.
 
 ## Usage
 
@@ -35,17 +35,17 @@ The browser client is built separately from the TypeScript server code:
 
 ```bash
 # Build server (TypeScript → dist/server/)
-pnpm --filter @emerge/dashboard build
+pnpm --filter @lwrf42/emerge-dashboard build
 
 # Build client (Vite → dist/client/)
-pnpm --filter @emerge/dashboard build:client
+pnpm --filter @lwrf42/emerge-dashboard build:client
 ```
 
 The client build is intentionally excluded from the default `pnpm build` chain to keep CI fast. Run both for a fully functional dashboard.
 
 ## How it works
 
-`emerge dashboard` shells out to `emerge-dashboard` without duplicating server logic. This keeps `@emerge/cli` free of Node HTTP and WebSocket dependencies.
+`emerge dashboard` shells out to `emerge-dashboard` without duplicating server logic. This keeps `@lwrf42/emerge-cli` free of Node HTTP and WebSocket dependencies.
 
 The dashboard server:
 1. Reads/tails the JSONL file

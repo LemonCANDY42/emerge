@@ -55,7 +55,7 @@ carries `sizeBytes` and optional `handle`; no contract changes are required.
 
 Tools that already know they are truncating should call `applyTruncationNotice`
 directly for precise `fullSize` reporting. The `makeFsReadTool` in
-`@emerge/tools` is the first adopter.
+`@lwrf42/emerge-tools` is the first adopter.
 
 ## Alternatives considered
 

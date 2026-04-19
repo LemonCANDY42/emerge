@@ -1,5 +1,5 @@
 /**
- * @emerge/tools-mcp — MCP client that wraps MCP servers as emerge Tool instances.
+ * @lwrf42/emerge-tools-mcp — MCP client that wraps MCP servers as emerge Tool instances.
  *
  * McpToolRegistry connects to one or more MCP servers (stdio or HTTP transport),
  * discovers their tools via `tools/list`, and registers each as an emerge Tool
@@ -21,7 +21,7 @@ import type {
   ToolRegistry,
   ToolResult,
   ToolSpec,
-} from "@emerge/kernel/contracts";
+} from "@lwrf42/emerge-kernel/contracts";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";

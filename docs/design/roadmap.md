@@ -55,7 +55,7 @@ guard.
 ### M1 — Kernel runtime + bus + modes + replay + providers
 [PR #1](https://github.com/LemonCANDY42/emerge/pull/1)
 
-`@emerge/kernel/runtime`: bus + scheduler + agent-runner + lineage-guard +
+`@lwrf42/emerge-kernel/runtime`: bus + scheduler + agent-runner + lineage-guard +
 cycle-guard + cost-meter + quota-router + Kernel facade. Plus
 `provider-mock`, `provider-anthropic`, `sandbox-inproc`, `tools`,
 `telemetry-jsonl`, `modes`, `replay`. Two demos: `hello-agent`,
@@ -65,7 +65,7 @@ weren't actually called from the agent loop initially.
 ### M2 — Surveillance + opaque adaptive decomposition + pinned reproducibility
 [PR #2](https://github.com/LemonCANDY42/emerge/pull/2)
 
-`@emerge/surveillance` with `CalibratedSurveillance`: rolling per-(provider,
+`@lwrf42/emerge-surveillance` with `CalibratedSurveillance`: rolling per-(provider,
 difficulty) stats, all 5 recommendation kinds (proceed / decompose /
 scaffold / escalate / defer), experience-hint scoring, sliding window. The
 kernel now calls `assess()` before every step and `observe()` after every
@@ -77,11 +77,11 @@ tier wired through both providers. Demos: `weak-model-decomposition`,
 ### M3a — Topology + Custodian/Adjudicator/Postmortem + artifacts + workspaces
 [PR #3](https://github.com/LemonCANDY42/emerge/pull/3)
 
-`@emerge/agents`: `supervisorWorker` / `workerPool` / `pipeline` topology
+`@lwrf42/emerge-agents`: `supervisorWorker` / `workerPool` / `pipeline` topology
 builders, `buildCustodian` / `buildAdjudicator` / `buildPostmortem` role
 helpers, `BlueprintRegistry` with typed slot validation. Plus
-`@emerge/artifacts-local-fs` (atomic-write store) and
-`@emerge/workspaces-git-worktree` (git-worktree allocator with tmpdir
+`@lwrf42/emerge-artifacts-local-fs` (atomic-write store) and
+`@lwrf42/emerge-workspaces-git-worktree` (git-worktree allocator with tmpdir
 fallback). Quota auto-routing: `quota.request` envelopes route to the
 configured Custodian; `applyQuotaGrant` mutates the budget atomically.
 Pinned-recall mechanism in `SimpleMemory` (always returns pinned items
@@ -91,7 +91,7 @@ regardless of budget). Adjudicator-gated `endSession()`. Demo:
 ### M3b — MCP + per-provider schema adapter + verification + truncation + vitest + real probes
 [PR #4](https://github.com/LemonCANDY42/emerge/pull/4)
 
-Driven by Terminal-Bench leaderboard research. `@emerge/tools-mcp`: MCP
+Driven by Terminal-Bench leaderboard research. `@lwrf42/emerge-tools-mcp`: MCP
 client that wraps any MCP server's tools as kernel-registered Tools,
 with name-collision protection and a permission-descriptor matrix.
 Per-provider JSON schema adapter (recursive — handles Zod-generated
@@ -114,23 +114,23 @@ payload (not just provider events). LLM-driven aggregation in
 explicitly provided). Postmortem auto-invoke from `Kernel.endSession()`
 when both `Postmortem` and `ExperienceLibrary` are mounted — closes the
 read/write loop on the experience system. Provider extensions:
-`@emerge/provider-openai` (Chat Completions + Responses API) and
-`@emerge/provider-openai-compat` (any OpenAI-compatible endpoint —
+`@lwrf42/emerge-provider-openai` (Chat Completions + Responses API) and
+`@lwrf42/emerge-provider-openai-compat` (any OpenAI-compatible endpoint —
 Ollama, vLLM, llama.cpp, LM Studio, OpenRouter, your self-hosted
-service). `@emerge/provider-anthropic` gains `extraHeaders`. Three new
+service). `@lwrf42/emerge-provider-anthropic` gains `extraHeaders`. Three new
 demos: `hello-agent-anthropic`, `hello-agent-openai`,
 `hello-agent-custom-url` (each runs against a real model when the env
 var is set; exits 0 with a clear "skipped" message otherwise).
 
 ### M3c2.5 — In-memory ExperienceLibrary backend + smarter postmortem
 
-`@emerge/experience-inmemory` ships `InMemoryExperienceLibrary` with
+`@lwrf42/emerge-experience-inmemory` ships `InMemoryExperienceLibrary` with
 `hint / ingest / export / importBundle / get` working end-to-end. Merge-on-ingest
 at configurable threshold (default 0.85) collapses repeated runs of the same
 approach into one growing experience rather than N duplicates. Weighted similarity
 scoring: approach 0.6 / taskType 0.3 / semantic (Jaccard) 0.1.
 
-`defaultAnalyze` in `@emerge/agents` rewritten to compute a stable
+`defaultAnalyze` in `@lwrf42/emerge-agents` rewritten to compute a stable
 `approachFingerprint` from session structure — the hash of (tools used,
 surveillance recommendations, decision choices) — not from session identity.
 `deriveTaskType` now returns `record.contractRef` (stable, always present) as the
@@ -160,11 +160,11 @@ self-built tooling.
 - **JSONL event schema as a public contract.** Define every event the
   recorder emits as a versioned, documented schema. Becomes the
   source-of-truth that CLI / TUI / web / OTel all derive from.
-- **`@emerge/telemetry-otel`** package. Emits per bus envelope + per
+- **`@lwrf42/emerge-telemetry-otel`** package. Emits per bus envelope + per
   surveillance verdict + per provider call + per tool call as OTel
   spans with W3C trace-context propagation. Compatible out-of-box with
   Phoenix (open-source self-hosted) and Langfuse.
-- **`@emerge/cli`** package. Subcommands:
+- **`@lwrf42/emerge-cli`** package. Subcommands:
   - `emerge run <blueprint.yaml>` — runs a configured agent.
   - `emerge replay <session.jsonl>` — replays a recorded session
     (uses the M1 record-replay tier).
@@ -178,11 +178,11 @@ self-built tooling.
 **Goal:** see what the harness is doing in real time, in the terminal
 or the browser.
 
-- **`@emerge/tui`** (Ink + React). Live topology tree, verdict feed,
+- **`@lwrf42/emerge-tui`** (Ink + React). Live topology tree, verdict feed,
   per-agent cost counter, pinned-context viewer, replay scrubber.
   Subscribes to the bus directly when running in-process; reads JSONL
   when replaying.
-- **`@emerge/dashboard`** (Vite + React + WebSocket). Same data, in a
+- **`@lwrf42/emerge-dashboard`** (Vite + React + WebSocket). Same data, in a
   browser. Topology graph (force-directed), trace timeline,
   cost/performance charts, verdict explorer. Single command:
   `emerge dashboard --session <id>` opens a local web view; `--listen`
@@ -202,9 +202,9 @@ shipped (M3c1) but **0 public benchmark submissions**. Even a low score
 more credible positioning than zero.
 
 **Shipped:**
-- `@emerge/eval-terminal-bench` — task loader, session builder, blueprint,
+- `@lwrf42/emerge-eval-terminal-bench` — task loader, session builder, blueprint,
   acceptance runner, CLI (`emerge-tbench run <task.yaml>`).
-- `@emerge/sandbox-harbor` — Docker-backed Sandbox for container isolation.
+- `@lwrf42/emerge-sandbox-harbor` — Docker-backed Sandbox for container isolation.
 - `TerminalBenchBlueprint` with sensible defaults (20 iterations, 100k/8k
   token budget, fs.read + fs.write + bash tools, adjudicator watching bus).
 - Two smoke examples: `tbench-smoke-inline` (InProcSandbox, no Docker) and
@@ -229,7 +229,7 @@ real bottlenecks are.
 **Goal:** sessions survive process restarts; long-running tasks resume
 from the last completed tool.
 
-- `@emerge/persistence-sqlite`. Tools are the checkpoint boundary
+- `@lwrf42/emerge-persistence-sqlite`. Tools are the checkpoint boundary
   (already established in ADR 0005). Resume reads recorded outputs;
   never re-prompts the model.
 - `WorkspaceManager.list()` becomes durable across processes.
@@ -240,11 +240,11 @@ from the last completed tool.
 **Goal:** smarter session-over-session through a real
 ExperienceLibrary backend.
 
-- `@emerge/memory-sqlite` with multi-strategy associative recall
+- `@lwrf42/emerge-memory-sqlite` with multi-strategy associative recall
   (semantic + structural + temporal + causal) and a real
   `RecallTrace`. Compression runs out-of-band; pinned items are
   non-droppable.
-- `@emerge/experience-sqlite` with merge-optimization on ingest,
+- `@lwrf42/emerge-experience-sqlite` with merge-optimization on ingest,
   bundle import / export, and similarity-based cross-session
   matching. Postmortem now drives a real learning loop.
 - Surveillance's `experienceHints` consume real priors.
@@ -254,8 +254,8 @@ ExperienceLibrary backend.
   for the topology helpers and persistence layer to mature.
 - **Sandbox-docker / sandbox-microvm**: real isolation for production
   deployments.
-- **Terminal-Bench wiring** (`@emerge/eval-terminal-bench`,
-  `@emerge/sandbox-harbor`, `TerminalBenchBlueprint`): the Python
+- **Terminal-Bench wiring** (`@lwrf42/emerge-eval-terminal-bench`,
+  `@lwrf42/emerge-sandbox-harbor`, `TerminalBenchBlueprint`): the Python
   bridge + container exec + the standard agent blueprint that runs
   Harbor tasks. Plan in `docs/design/terminal-bench-integration-plan.md`.
 - **mesh / tree / debate topologies**: more topology builders once the

@@ -73,7 +73,7 @@ class MyPostmortem implements Postmortem {
 ## SDK integration (emerge-as-client)
 
 ```typescript
-import type { Postmortem, SessionRecord, Experience, ExperienceId, AgentId } from "@emerge/kernel/contracts";
+import type { Postmortem, SessionRecord, Experience, ExperienceId, AgentId } from "@lwrf42/emerge-kernel/contracts";
 
 const myPostmortem: Postmortem = {
   analyze: async (record: SessionRecord): Promise<Result<readonly Experience[]>> => {
@@ -143,7 +143,7 @@ if (endResult.ok) {
 Store and retrieve experiences:
 
 ```typescript
-import type { ExperienceLibrary, Experience, ExperienceMatch, HintQuery, HintBudget } from "@emerge/kernel/contracts";
+import type { ExperienceLibrary, Experience, ExperienceMatch, HintQuery, HintBudget } from "@lwrf42/emerge-kernel/contracts";
 
 // Mount the library
 const library: ExperienceLibrary = ...;  // e.g., InMemoryExperienceLibrary (demo), SQLite-backed (M5)
@@ -292,7 +292,7 @@ async analyze(record: SessionRecord): Promise<Result<readonly Experience[]>> {
 ## Minimal invocation
 
 ```typescript
-import type { Postmortem, SessionRecord, Experience, ExperienceId, AgentId, Result } from "@emerge/kernel/contracts";
+import type { Postmortem, SessionRecord, Experience, ExperienceId, AgentId, Result } from "@lwrf42/emerge-kernel/contracts";
 
 const postmortem: Postmortem = {
   analyze: async (record: SessionRecord): Promise<Result<readonly Experience[]>> => ({

@@ -54,7 +54,7 @@ Added `schemaAdapter?: SchemaAdapter` to `SessionBuilderOptions` and
 `buildSession()` calls `kernel.mountSchemaAdapter(provider.capabilities.id, adapter)`
 after `kernel.mountProvider(provider)`.
 
-The `SchemaAdapter` type is re-exported from `@emerge/kernel/runtime` through
+The `SchemaAdapter` type is re-exported from `@lwrf42/emerge-kernel/runtime` through
 `session-builder.ts` and `blueprint.ts` so callers don't need to import it separately.
 
 Files changed:
@@ -315,7 +315,7 @@ context at each iteration. No unexpected surveillance interventions observed.
 
 | File | Change |
 |------|--------|
-| `packages/eval-terminal-bench/src/session-builder.ts` | Added `schemaAdapter?: SchemaAdapter` to `SessionBuilderOptions`, import of `SchemaAdapter` from `@emerge/kernel/runtime`, and `kernel.mountSchemaAdapter()` call |
+| `packages/eval-terminal-bench/src/session-builder.ts` | Added `schemaAdapter?: SchemaAdapter` to `SessionBuilderOptions`, import of `SchemaAdapter` from `@lwrf42/emerge-kernel/runtime`, and `kernel.mountSchemaAdapter()` call |
 | `packages/eval-terminal-bench/src/blueprint.ts` | Re-exports `SchemaAdapter` type for convenience |
 | `examples/tbench-real-inline/src/index.ts` | NEW — real-model demo |
 | `examples/tbench-real-inline/package.json` | NEW |

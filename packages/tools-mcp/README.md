@@ -1,4 +1,4 @@
-# @emerge/tools-mcp
+# @lwrf42/emerge-tools-mcp
 
 MCP (Model Context Protocol) tool integration for the emerge agent harness.
 
@@ -7,13 +7,13 @@ v0.1.0 — early. See main repo for verified-vs-unverified surfaces.
 ## Install
 
 ```bash
-npm install @emerge/tools-mcp
+npm install @lwrf42/emerge-tools-mcp
 ```
 
 ## Quick example
 
 ```ts
-import { mcpClientTool } from "@emerge/tools-mcp";
+import { mcpClientTool } from "@lwrf42/emerge-tools-mcp";
 
 // Connect to an MCP server and expose its tools to an emerge agent.
 const tool = await mcpClientTool({

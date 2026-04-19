@@ -5,9 +5,9 @@
  * Run 2: A "strong" mock that returns meaningful responses for all probes → ceiling = research.
  */
 
-import type { ProviderEvent } from "@emerge/kernel/contracts";
-import { MockProvider } from "@emerge/provider-mock";
-import { CalibratedSurveillance, DEFAULT_PROBES } from "@emerge/surveillance";
+import type { ProviderEvent } from "@lwrf42/emerge-kernel/contracts";
+import { MockProvider } from "@lwrf42/emerge-provider-mock";
+import { CalibratedSurveillance, DEFAULT_PROBES } from "@lwrf42/emerge-surveillance";
 
 // --- Weak mock: returns generic "I don't know" for every call ---
 

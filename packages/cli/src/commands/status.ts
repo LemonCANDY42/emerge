@@ -7,8 +7,8 @@
 import fs from "node:fs";
 import path from "node:path";
 import readline from "node:readline";
-import { parseJsonlLine } from "@emerge/kernel/contracts";
-import type { JsonlEvent } from "@emerge/kernel/contracts";
+import { parseJsonlLine } from "@lwrf42/emerge-kernel/contracts";
+import type { JsonlEvent } from "@lwrf42/emerge-kernel/contracts";
 
 export interface StatusOptions {
   /** Directory to scan for JSONL session files. Default: ".emerge". */

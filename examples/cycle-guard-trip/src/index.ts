@@ -14,9 +14,15 @@
  * every time → identical fingerprint every time.
  */
 
-import type { AgentId, ProviderEvent, SessionId, Tool, ToolResult } from "@emerge/kernel/contracts";
-import { Kernel } from "@emerge/kernel/runtime";
-import { MockProvider } from "@emerge/provider-mock";
+import type {
+  AgentId,
+  ProviderEvent,
+  SessionId,
+  Tool,
+  ToolResult,
+} from "@lwrf42/emerge-kernel/contracts";
+import { Kernel } from "@lwrf42/emerge-kernel/runtime";
+import { MockProvider } from "@lwrf42/emerge-provider-mock";
 
 async function main() {
   console.log("=== cycle-guard-trip demo ===\n");

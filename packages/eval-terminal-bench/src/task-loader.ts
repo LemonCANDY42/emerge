@@ -6,8 +6,8 @@
 import { execFileSync } from "node:child_process";
 import fs from "node:fs/promises";
 import path from "node:path";
-import type { Result } from "@emerge/kernel/contracts";
-import { ScopedTmpdirWorkspaceManager } from "@emerge/workspaces-git-worktree";
+import type { Result } from "@lwrf42/emerge-kernel/contracts";
+import { ScopedTmpdirWorkspaceManager } from "@lwrf42/emerge-workspaces-git-worktree";
 import { parse as parseYaml } from "yaml";
 import { z } from "zod";
 
@@ -146,7 +146,7 @@ export async function loadTask(filePath: string): Promise<Result<LoadedTask>> {
 export async function materializeTask(spec: TaskSpec): Promise<Result<LoadedTask>> {
   const mgr = new ScopedTmpdirWorkspaceManager();
   const allocResult = await mgr.allocate({
-    for: "tbench-loader" as import("@emerge/kernel/contracts").AgentId,
+    for: "tbench-loader" as import("@lwrf42/emerge-kernel/contracts").AgentId,
   });
   if (!allocResult.ok) return allocResult;
   const ws = allocResult.value;

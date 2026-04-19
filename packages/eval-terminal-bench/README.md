@@ -1,4 +1,4 @@
-# @emerge/eval-terminal-bench
+# @lwrf42/emerge-eval-terminal-bench
 
 Terminal-Bench task runner for the emerge agent harness. Provides:
 
@@ -13,13 +13,13 @@ v0.1.0 — early. Real-model verified against `gpt-5.4` with Docker and inproc s
 ## Install
 
 ```bash
-npm install @emerge/eval-terminal-bench
+npm install @lwrf42/emerge-eval-terminal-bench
 ```
 
 Or run without installing:
 
 ```bash
-npx @emerge/eval-terminal-bench run task.yaml --sandbox inproc
+npx @lwrf42/emerge-eval-terminal-bench run task.yaml --sandbox inproc
 ```
 
 ## Import
@@ -30,7 +30,7 @@ import {
   materializeTask,
   runAcceptance,
   makeTerminalBenchBlueprint,
-} from "@emerge/eval-terminal-bench";
+} from "@lwrf42/emerge-eval-terminal-bench";
 ```
 
 ## Task spec format
@@ -63,8 +63,8 @@ Supported `repo.kind` values:
 ## Blueprint usage
 
 ```ts
-import { loadTask, makeTerminalBenchBlueprint } from "@emerge/eval-terminal-bench";
-import { AnthropicProvider } from "@emerge/provider-anthropic";
+import { loadTask, makeTerminalBenchBlueprint } from "@lwrf42/emerge-eval-terminal-bench";
+import { AnthropicProvider } from "@lwrf42/emerge-provider-anthropic";
 
 const task = (await loadTask("task.yaml")).value;
 const provider = new AnthropicProvider(process.env.ANTHROPIC_API_KEY);

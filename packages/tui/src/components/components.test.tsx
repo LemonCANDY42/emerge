@@ -8,8 +8,8 @@
  * lastFrame() which returns the most-recently rendered string.
  */
 
-import type { AgentId, ContractId, SessionId } from "@emerge/kernel/contracts";
-import { JSONL_SCHEMA_VERSION, type JsonlEvent } from "@emerge/kernel/contracts";
+import type { AgentId, ContractId, SessionId } from "@lwrf42/emerge-kernel/contracts";
+import { JSONL_SCHEMA_VERSION, type JsonlEvent } from "@lwrf42/emerge-kernel/contracts";
 import { render } from "ink-testing-library";
 import React from "react";
 import { describe, expect, it } from "vitest";
@@ -34,7 +34,7 @@ function makeHandshake(id: AgentId, spawnedBy?: AgentId, role = "worker"): Jsonl
     at: Date.now(),
     envelope: {
       kind: "handshake",
-      correlationId: `corr-${id}` as import("@emerge/kernel/contracts").CorrelationId,
+      correlationId: `corr-${id}` as import("@lwrf42/emerge-kernel/contracts").CorrelationId,
       sessionId: SESSION_ID,
       from: id,
       to: { kind: "broadcast" },
@@ -52,8 +52,8 @@ function makeHandshake(id: AgentId, spawnedBy?: AgentId, role = "worker"): Jsonl
           maxConcurrency: 1,
         },
         io: {
-          accepts: "any" as unknown as import("@emerge/kernel/contracts").SchemaRef,
-          produces: "any" as unknown as import("@emerge/kernel/contracts").SchemaRef,
+          accepts: "any" as unknown as import("@lwrf42/emerge-kernel/contracts").SchemaRef,
+          produces: "any" as unknown as import("@lwrf42/emerge-kernel/contracts").SchemaRef,
         },
         budget: { tokensIn: 1000, tokensOut: 500, usd: 1.0 },
         termination: {
@@ -72,13 +72,13 @@ function makeHandshake(id: AgentId, spawnedBy?: AgentId, role = "worker"): Jsonl
         },
         lineage: { spawnedBy, depth: spawnedBy !== undefined ? 1 : 0 },
       },
-    } as import("@emerge/kernel/contracts").BusEnvelope,
+    } as import("@lwrf42/emerge-kernel/contracts").BusEnvelope,
   };
 }
 
 function makeLifecycle(
   agent: AgentId,
-  transition: import("@emerge/kernel/contracts").AgentState,
+  transition: import("@lwrf42/emerge-kernel/contracts").AgentState,
 ): JsonlEvent {
   return {
     v: JSONL_SCHEMA_VERSION,
@@ -109,13 +109,13 @@ function makeVerdict(
     at,
     envelope: {
       kind: "verdict",
-      correlationId: "corr-v" as import("@emerge/kernel/contracts").CorrelationId,
+      correlationId: "corr-v" as import("@lwrf42/emerge-kernel/contracts").CorrelationId,
       sessionId: SESSION_ID,
       from,
       to: { kind: "broadcast" },
       timestamp: at,
       verdict,
-    } as import("@emerge/kernel/contracts").BusEnvelope,
+    } as import("@lwrf42/emerge-kernel/contracts").BusEnvelope,
   };
 }
 
@@ -253,7 +253,8 @@ describe("CostMeter component", () => {
         v: JSONL_SCHEMA_VERSION,
         type: "provider_call",
         at: Date.now(),
-        req: { messages: [] } as unknown as import("@emerge/kernel/contracts").ProviderRequest,
+        // biome-ignore format: inline type import must stay single-line
+        req: { messages: [] } as unknown as import("@lwrf42/emerge-kernel/contracts").ProviderRequest,
         events: [
           {
             type: "stop",
@@ -277,7 +278,8 @@ describe("CostMeter component", () => {
         v: JSONL_SCHEMA_VERSION,
         type: "provider_call",
         at: Date.now(),
-        req: { messages: [] } as unknown as import("@emerge/kernel/contracts").ProviderRequest,
+        // biome-ignore format: inline type import must stay single-line
+        req: { messages: [] } as unknown as import("@lwrf42/emerge-kernel/contracts").ProviderRequest,
         events: [
           {
             type: "stop",
@@ -320,7 +322,7 @@ describe("PinnedContext component", () => {
 
 describe("parser: bad JSONL line tolerance", () => {
   it("parseJsonlLine skips invalid JSON and does not crash", async () => {
-    const { parseJsonlLine } = await import("@emerge/kernel/contracts");
+    const { parseJsonlLine } = await import("@lwrf42/emerge-kernel/contracts");
 
     const badLine = "{not valid json at all";
     const result = parseJsonlLine(badLine);
@@ -372,7 +374,8 @@ describe("parser: readAllLines handles every JsonlEvent discriminant", () => {
         v: JSONL_SCHEMA_VERSION,
         type: "provider_call",
         at: Date.now(),
-        req: { messages: [] } as unknown as import("@emerge/kernel/contracts").ProviderRequest,
+        // biome-ignore format: inline type import must stay single-line
+        req: { messages: [] } as unknown as import("@lwrf42/emerge-kernel/contracts").ProviderRequest,
         events: [
           {
             type: "stop",
@@ -386,9 +389,9 @@ describe("parser: readAllLines handles every JsonlEvent discriminant", () => {
         type: "tool_call",
         at: Date.now(),
         call: {
-          toolCallId: "tc-1" as import("@emerge/kernel/contracts").ToolCallId,
+          toolCallId: "tc-1" as import("@lwrf42/emerge-kernel/contracts").ToolCallId,
           callerAgent: AGENT_A,
-          name: "fs.read" as import("@emerge/kernel/contracts").ToolName,
+          name: "fs.read" as import("@lwrf42/emerge-kernel/contracts").ToolName,
           input: {},
         },
         result: { ok: true, preview: "done" },
@@ -397,7 +400,7 @@ describe("parser: readAllLines handles every JsonlEvent discriminant", () => {
         v: JSONL_SCHEMA_VERSION,
         type: "surveillance_recommendation",
         at: Date.now(),
-        input: {} as unknown as import("@emerge/kernel/contracts").AssessmentInput,
+        input: {} as unknown as import("@lwrf42/emerge-kernel/contracts").AssessmentInput,
         recommendation: { kind: "proceed", confidence: 0.9, rationale: "ok" },
       },
       {
@@ -413,7 +416,7 @@ describe("parser: readAllLines handles every JsonlEvent discriminant", () => {
         type: "span.start",
         at: Date.now(),
         span: {
-          id: "span-1" as import("@emerge/kernel/contracts").SpanId,
+          id: "span-1" as import("@lwrf42/emerge-kernel/contracts").SpanId,
           kind: "agent_spawn",
           name: "spawn:agent-a",
           agent: AGENT_A,
@@ -425,7 +428,7 @@ describe("parser: readAllLines handles every JsonlEvent discriminant", () => {
         type: "span.end",
         at: Date.now(),
         span: {
-          id: "span-1" as import("@emerge/kernel/contracts").SpanId,
+          id: "span-1" as import("@lwrf42/emerge-kernel/contracts").SpanId,
           endedAt: Date.now(),
           status: "ok",
           usage: { tokensIn: 0, tokensOut: 0, wallMs: 0, toolCalls: 0, usd: 0 },
@@ -435,7 +438,7 @@ describe("parser: readAllLines handles every JsonlEvent discriminant", () => {
         v: JSONL_SCHEMA_VERSION,
         type: "span.event",
         at: Date.now(),
-        spanId: "span-1" as import("@emerge/kernel/contracts").SpanId,
+        spanId: "span-1" as import("@lwrf42/emerge-kernel/contracts").SpanId,
         name: "checkpoint",
       },
     ];

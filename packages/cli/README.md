@@ -1,4 +1,4 @@
-# @emerge/cli
+# @lwrf42/emerge-cli
 
 Command-line interface for the emerge agent harness: `run`, `replay`, `probe`, and `status` commands.
 
@@ -7,13 +7,13 @@ v0.1.0 — early. See main repo for verified-vs-unverified surfaces.
 ## Install
 
 ```bash
-npm install -g @emerge/cli
+npm install -g @lwrf42/emerge-cli
 ```
 
 Or run without installing:
 
 ```bash
-npx @emerge/cli run blueprint.yaml
+npx @lwrf42/emerge-cli run blueprint.yaml
 ```
 
 ## Commands

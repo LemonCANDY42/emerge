@@ -3,12 +3,12 @@ import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
 
 // Vite config for the browser client bundle.
-// Run: pnpm --filter @emerge/dashboard build:client
+// Run: pnpm --filter @lwrf42/emerge-dashboard build:client
 // Output: dist/client/ (served as static assets by the Node HTTP server)
 //
 // This build is intentionally NOT part of the default `pnpm build` chain because
 // it pulls in React + Tailwind + CSS transforms which add ~5s to the build.
-// CI should run `pnpm --filter @emerge/dashboard build:client` separately
+// CI should run `pnpm --filter @lwrf42/emerge-dashboard build:client` separately
 // after the TypeScript compile step.
 
 export default defineConfig({
@@ -23,7 +23,7 @@ export default defineConfig({
   },
   resolve: {
     alias: {
-      // Allow the client to import from @emerge/tui/state via the built dist.
+      // Allow the client to import from @lwrf42/emerge-tui/state via the built dist.
       // During development (vite dev), TypeScript source is used instead.
     },
   },

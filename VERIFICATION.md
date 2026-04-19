@@ -36,11 +36,11 @@ The following paths compile, pass all mock-driven tests, and have correct adapte
 
 | Provider / path | Package | Notes |
 |---|---|---|
-| Anthropic Claude (via `api.anthropic.com`) | `@emerge/provider-anthropic` | Adapter ships; needs real `ANTHROPIC_API_KEY` run |
-| Direct OpenAI (`api.openai.com/v1`) | `@emerge/provider-openai` | Verified via compat gateway; direct endpoint untested |
-| Ollama (local) | `@emerge/provider-openai-compat` | Architecture identical to verified gateway path |
-| vLLM | `@emerge/provider-openai-compat` | Architecture identical to verified gateway path |
-| llama.cpp | `@emerge/provider-openai-compat` | Architecture identical to verified gateway path |
+| Anthropic Claude (via `api.anthropic.com`) | `@lwrf42/emerge-provider-anthropic` | Adapter ships; needs real `ANTHROPIC_API_KEY` run |
+| Direct OpenAI (`api.openai.com/v1`) | `@lwrf42/emerge-provider-openai` | Verified via compat gateway; direct endpoint untested |
+| Ollama (local) | `@lwrf42/emerge-provider-openai-compat` | Architecture identical to verified gateway path |
+| vLLM | `@lwrf42/emerge-provider-openai-compat` | Architecture identical to verified gateway path |
+| llama.cpp | `@lwrf42/emerge-provider-openai-compat` | Architecture identical to verified gateway path |
 
 ### Reasoning levels
 

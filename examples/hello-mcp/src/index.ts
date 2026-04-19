@@ -1,5 +1,5 @@
 /**
- * hello-mcp — end-to-end demo of @emerge/tools-mcp.
+ * hello-mcp — end-to-end demo of @lwrf42/emerge-tools-mcp.
  *
  * Uses an in-process mock MCP server (via @modelcontextprotocol/sdk's InMemoryTransport)
  * to avoid requiring any external process. Demonstrates:
@@ -15,15 +15,25 @@
  *   - Remove the in-process server setup below.
  */
 
-import type { PermissionDescriptor, Tool, ToolRegistry, ToolSpec } from "@emerge/kernel/contracts";
-import { McpToolRegistry } from "@emerge/tools-mcp";
+import type {
+  PermissionDescriptor,
+  Tool,
+  ToolRegistry,
+  ToolSpec,
+} from "@lwrf42/emerge-kernel/contracts";
+import { McpToolRegistry } from "@lwrf42/emerge-tools-mcp";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 
 // ---- Minimal in-process Sandbox (allow all) ----
 
-import type { Result, Sandbox, SandboxDecision, SandboxRequest } from "@emerge/kernel/contracts";
+import type {
+  Result,
+  Sandbox,
+  SandboxDecision,
+  SandboxRequest,
+} from "@lwrf42/emerge-kernel/contracts";
 
 class PermissiveSandbox implements Sandbox {
   async authorize(_req: SandboxRequest): Promise<Result<SandboxDecision>> {
