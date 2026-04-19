@@ -4,13 +4,19 @@
  * Task: Read examples/README.md, summarize it, write the summary to NOTES.md.
  *
  * Environment variables:
- *   OPENAI_API_KEY    (required to run for real; if absent, prints skip message and exits 0)
- *   OPENAI_BASE_URL   (optional; defaults to api.openai.com)
- *   OPENAI_MODEL      (optional; defaults to gpt-4o)
- *   OPENAI_PROTOCOL   (optional; "chat" | "responses", defaults to "chat")
+ *   OPENAI_API_KEY          (required to run for real; if absent, prints skip message and exits 0)
+ *   OPENAI_BASE_URL         (optional; must include /v1 for custom gateways, e.g. https://host/v1)
+ *   OPENAI_MODEL            (optional; defaults to gpt-4o)
+ *   OPENAI_PROTOCOL         (optional; "chat" | "responses", defaults to "chat")
+ *   OPENAI_REASONING_EFFORT (optional; "minimal"|"low"|"medium"|"high"|"xhigh")
+ *   OPENAI_REASONING_SUMMARY (optional; "auto"|"concise"|"detailed"; responses protocol only)
  *
  * Run:
  *   OPENAI_API_KEY=sk-... node examples/hello-agent-openai/dist/index.js
+ *
+ * With reasoning (o3 / gpt-5.x models):
+ *   OPENAI_API_KEY=sk-... OPENAI_MODEL=o3-mini OPENAI_REASONING_EFFORT=high \
+ *     node examples/hello-agent-openai/dist/index.js
  */
 
 import fs from "node:fs/promises";
@@ -20,7 +26,7 @@ import type { AgentId, SessionId } from "@emerge/kernel/contracts";
 import { Kernel } from "@emerge/kernel/runtime";
 import { BuiltinModeRegistry, permissionPolicyForMode } from "@emerge/modes";
 import { OpenAIProvider, openaiSchemaAdapter } from "@emerge/provider-openai";
-import type { OpenAIProtocol } from "@emerge/provider-openai";
+import type { OpenAIProtocol, OpenAIReasoningConfig } from "@emerge/provider-openai";
 import { makeRecorder } from "@emerge/replay";
 import { InProcSandbox } from "@emerge/sandbox-inproc";
 import { makeFsReadTool, makeFsWriteTool } from "@emerge/tools";
@@ -50,14 +56,36 @@ async function main() {
   const protocolEnv = process.env["OPENAI_PROTOCOL"];
   const protocol: OpenAIProtocol = protocolEnv === "responses" ? "responses" : "chat";
 
+  // biome-ignore lint/complexity/useLiteralKeys: env access requires bracket notation
+  const reasoningEffortEnv = process.env["OPENAI_REASONING_EFFORT"] as
+    | OpenAIReasoningConfig["effort"]
+    | undefined;
+  // biome-ignore lint/complexity/useLiteralKeys: env access requires bracket notation
+  const reasoningSummaryEnv = process.env["OPENAI_REASONING_SUMMARY"] as
+    | OpenAIReasoningConfig["summary"]
+    | undefined;
+  const reasoning: OpenAIReasoningConfig | undefined =
+    reasoningEffortEnv !== undefined
+      ? {
+          effort: reasoningEffortEnv,
+          ...(reasoningSummaryEnv !== undefined ? { summary: reasoningSummaryEnv } : {}),
+        }
+      : undefined;
+
   const provider = new OpenAIProvider({
     apiKey,
     ...(baseURL !== undefined ? { baseURL } : {}),
     ...(model !== undefined ? { model } : {}),
     protocol,
+    ...(reasoning !== undefined ? { reasoning } : {}),
   });
 
   console.log(`Provider: ${provider.capabilities.id} (protocol: ${protocol})`);
+  if (reasoning !== undefined) {
+    console.log(
+      `  Reasoning effort: ${reasoning.effort}${reasoning.summary !== undefined ? ` (summary: ${reasoning.summary})` : ""}`,
+    );
+  }
 
   const modeRegistry = new BuiltinModeRegistry();
   const policy = permissionPolicyForMode(modeRegistry, "auto");

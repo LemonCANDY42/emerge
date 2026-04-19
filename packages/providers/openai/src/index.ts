@@ -8,6 +8,28 @@
  * When `baseURL` is provided, the client routes to that endpoint instead of
  * api.openai.com, which enables custom OpenAI-compatible services.
  *
+ * ## baseURL / path note
+ * The OpenAI Node SDK does NOT automatically append `/v1` to the baseURL.
+ * It appends only `/<endpoint>` (e.g. `/responses` or `/chat/completions`)
+ * directly to the baseURL you supply. For OpenAI-compatible gateways that
+ * expose the standard `/v1/<endpoint>` paths, you MUST include `/v1` in
+ * your baseURL:
+ *
+ *   baseURL: "https://gmn.example.com/v1"  → hits /v1/responses  (correct)
+ *   baseURL: "https://gmn.example.com"     → hits /responses      (wrong — 404)
+ *
+ * The official OpenAI API default is "https://api.openai.com/v1" which
+ * already includes `/v1`. When pointing to a custom gateway, append `/v1`
+ * unless your gateway is mounted at root.
+ *
+ * See docs/providers/reasoning-and-thinking.md for the full reference.
+ *
+ * ## Tool name sanitization
+ * OpenAI's API restricts function names to ^[a-zA-Z0-9_-]+$. Emerge tool
+ * names use dots (e.g. "fs.read"). The provider automatically sanitizes
+ * outgoing tool names (replacing "." with "_") and reverse-translates
+ * incoming function_call names back to the original before emitting events.
+ *
  * M3c1: exports the recommended schema adapter for OpenAI tool-use.
  */
 
@@ -26,8 +48,36 @@ import type {
   Result,
 } from "@emerge/kernel/contracts";
 import OpenAI from "openai";
+import type { RetryOptions, SleepFn } from "./retry.js";
+import { DEFAULT_RETRY_OPTIONS, defaultSleep, withRetry } from "./retry.js";
+import type { ToolNameMap } from "./sanitize.js";
+import { buildToolNameMap } from "./sanitize.js";
+
+export type { RetryOptions } from "./retry.js";
 
 export type OpenAIProtocol = "chat" | "responses";
+
+/**
+ * Reasoning configuration for o-series / GPT-5.x models.
+ *
+ * For the Responses API (protocol: "responses"):
+ *   - `effort` maps to the `reasoning.effort` field.
+ *   - `summary` maps to the `reasoning.summary` field.
+ *   - "xhigh" is a non-standard value requested by the user; it is passed
+ *     verbatim. If the upstream rejects it, the error is surfaced directly.
+ *
+ * For Chat Completions (protocol: "chat"):
+ *   - `effort` maps to the `reasoning_effort` parameter (o1/o3-mini models).
+ *   - `summary` is ignored (not supported by the Chat Completions API).
+ *
+ * Environment variables:
+ *   OPENAI_REASONING_EFFORT=xhigh   (any effort value)
+ *   OPENAI_REASONING_SUMMARY=concise
+ */
+export interface OpenAIReasoningConfig {
+  readonly effort: "minimal" | "low" | "medium" | "high" | "xhigh";
+  readonly summary?: "auto" | "concise" | "detailed" | null;
+}
 
 export interface OpenAIProviderConfig {
   readonly apiKey?: string;
@@ -53,6 +103,29 @@ export interface OpenAIProviderConfig {
    * C4: Override the cost-per-million-output-tokens used in USD calculation.
    */
   readonly costPerMtokOut?: number;
+  /**
+   * Retry-on-5xx configuration. Set to `false` to disable all retries.
+   * Default: 3 attempts, 500ms initial delay, 10s cap, with jitter.
+   */
+  readonly retry?: RetryOptions | false;
+  /**
+   * Reasoning / thinking level for o-series and GPT-5.x models.
+   * When set, the effort is forwarded to `reasoning_effort` (chat) or
+   * `reasoning.effort` (responses). Absent = no reasoning parameter sent.
+   *
+   * Read from OPENAI_REASONING_EFFORT and OPENAI_REASONING_SUMMARY env vars
+   * if not provided explicitly.
+   */
+  readonly reasoning?: OpenAIReasoningConfig;
+  /**
+   * Extra parameters merged into every API call (responses.create or
+   * chat.completions.create). Used by OpenAICompatProvider to support
+   * gateway-specific extensions. Fields here are shallow-merged AFTER the
+   * standard parameters, so they can override standard fields if needed.
+   *
+   * Prefer the typed options above (reasoning, extraHeaders) when available.
+   */
+  readonly extraParams?: Record<string, unknown>;
 }
 
 // Default GPT-5-class capabilities when model/baseURL not further specified
@@ -82,6 +155,38 @@ const CUSTOM_URL_CLAIMED_CAPABILITIES = {
 };
 
 const DEFAULT_MODEL = "gpt-4o";
+
+/**
+ * Emit a warning if the baseURL looks like it already has an endpoint path
+ * embedded (which would cause double-path requests like /responses/responses).
+ *
+ * Also warn when a custom baseURL does NOT end with /v1 (or /v1/), since the
+ * OpenAI Node SDK appends only /<endpoint> — not /v1/<endpoint> — to the
+ * baseURL. For OpenAI-compatible gateways that expose /v1/<endpoint> paths,
+ * the /v1 segment MUST be part of the baseURL.
+ */
+function warnIfBaseURLHasEndpointPath(baseURL: string): void {
+  const lower = baseURL.toLowerCase().replace(/\/$/, "");
+  if (
+    lower.endsWith("/responses") ||
+    lower.endsWith("/v1/responses") ||
+    lower.endsWith("/chat/completions") ||
+    lower.endsWith("/v1/chat/completions")
+  ) {
+    console.warn(
+      `[openai] WARNING: baseURL "${baseURL}" appears to include an endpoint path. The OpenAI SDK appends /<endpoint> directly to the baseURL (e.g. /responses), so your URL should end with /v1 — not the full endpoint. Example: "https://api.example.com/v1" → hits /v1/responses correctly.`,
+    );
+    return;
+  }
+
+  // Warn if the custom baseURL does not end with /v1 — a very common mistake
+  // when pointing at OpenAI-compatible gateways that mount the API at /v1.
+  if (!lower.endsWith("/v1")) {
+    console.warn(
+      `[openai] WARNING: baseURL "${baseURL}" does not end with "/v1". The OpenAI SDK appends /<endpoint> directly to the baseURL (not /v1/<endpoint>). For OpenAI-compatible gateways that expose /v1/responses or /v1/chat/completions, include "/v1" in your baseURL: e.g. "${baseURL.replace(/\/$/, "")}/v1". If your gateway mounts the API at root ("/"), ignore this warning.`,
+    );
+  }
+}
 
 /**
  * Translate a ProviderMessage[] into OpenAI's ChatCompletionMessageParam[].
@@ -155,12 +260,19 @@ function toOpenAIMessages(
 
 /**
  * Translate ProviderToolSpec[] into OpenAI's ChatCompletionTool[].
+ *
+ * Uses the provided ToolNameMap to emit sanitized (wire-safe) names.
+ * Original emerge names (e.g. "fs.read") are translated to wire names
+ * (e.g. "fs_read") so the OpenAI API accepts them.
  */
-function toOpenAITools(tools: readonly ProviderToolSpec[]): OpenAI.Chat.ChatCompletionTool[] {
+function toOpenAITools(
+  tools: readonly ProviderToolSpec[],
+  nameMap: ToolNameMap,
+): OpenAI.Chat.ChatCompletionTool[] {
   return tools.map((t) => ({
     type: "function" as const,
     function: {
-      name: t.name,
+      name: nameMap.originalToWire.get(t.name) ?? t.name,
       description: t.description,
       parameters: (t.inputSchema ?? { type: "object" }) as Record<string, unknown>,
     },
@@ -190,10 +302,44 @@ export class OpenAIProvider implements Provider {
   private readonly client: OpenAI;
   private readonly model: string;
   private readonly protocol: OpenAIProtocol;
+  private readonly retryOpts: RetryOptions | false;
+  private readonly reasoning: OpenAIReasoningConfig | undefined;
+  private readonly extraParams: Record<string, unknown> | undefined;
+  // Injected sleep for testability
+  readonly _sleep: SleepFn;
 
-  constructor(config: OpenAIProviderConfig = {}) {
+  constructor(config: OpenAIProviderConfig = {}, _sleep: SleepFn = defaultSleep) {
     this.model = config.model ?? DEFAULT_MODEL;
     this.protocol = config.protocol ?? "chat";
+    this.retryOpts = config.retry !== undefined ? config.retry : DEFAULT_RETRY_OPTIONS;
+    this._sleep = _sleep;
+
+    // Resolve reasoning config: explicit config wins over env vars
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature requires bracket notation
+    const effortEnv = process.env["OPENAI_REASONING_EFFORT"] as
+      | OpenAIReasoningConfig["effort"]
+      | undefined;
+    // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature requires bracket notation
+    const summaryEnv = process.env["OPENAI_REASONING_SUMMARY"] as
+      | OpenAIReasoningConfig["summary"]
+      | undefined;
+
+    if (config.reasoning !== undefined) {
+      this.reasoning = config.reasoning;
+    } else if (effortEnv !== undefined) {
+      this.reasoning = {
+        effort: effortEnv,
+        ...(summaryEnv !== undefined ? { summary: summaryEnv } : {}),
+      };
+    } else {
+      this.reasoning = undefined;
+    }
+
+    this.extraParams = config.extraParams;
+
+    if (config.baseURL !== undefined) {
+      warnIfBaseURLHasEndpointPath(config.baseURL);
+    }
 
     this.client = new OpenAI({
       // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature requires bracket notation
@@ -229,7 +375,11 @@ export class OpenAIProvider implements Provider {
 
   private async *invokeChat(req: ProviderRequest): AsyncIterable<ProviderEvent> {
     const messages = toOpenAIMessages(req.messages);
-    const tools = req.tools && req.tools.length > 0 ? toOpenAITools(req.tools) : undefined;
+
+    // Build per-request name map: sanitizes dotted emerge names (e.g. "fs.read" → "fs_read")
+    // and enables reverse-translation of incoming function_call names.
+    const nameMap = buildToolNameMap(req.tools ?? []);
+    const tools = req.tools && req.tools.length > 0 ? toOpenAITools(req.tools, nameMap) : undefined;
 
     const startMs = Date.now();
     let inputTokens = 0;
@@ -240,16 +390,38 @@ export class OpenAIProvider implements Provider {
     const callIdToName = new Map<string, string>();
 
     try {
-      const stream = await this.client.chat.completions.create({
+      // Retry wraps the stream-creation call only. Once the stream is open and
+      // we've started yielding events, mid-stream errors are NOT retried to
+      // avoid duplicating already-emitted events.
+      //
+      // We build the params object with `as` to avoid overload-resolution
+      // issues when extraParams spreads unknown keys. The stream: true literal
+      // is preserved so the result is typed as AsyncIterable<ChatCompletionChunk>.
+      const chatParams = {
         model: this.model,
         messages,
-        stream: true,
+        stream: true as const,
         stream_options: { include_usage: true },
         max_tokens: req.maxOutputTokens ?? 4096,
         ...(req.temperature !== undefined ? { temperature: req.temperature } : {}),
         ...(req.stopSequences !== undefined ? { stop: [...req.stopSequences] } : {}),
-        ...(tools !== undefined ? { tools, tool_choice: "auto" } : {}),
-      });
+        ...(tools !== undefined ? { tools, tool_choice: "auto" as const } : {}),
+        // reasoning_effort for o-series models via Chat Completions
+        ...(this.reasoning !== undefined ? { reasoning_effort: this.reasoning.effort } : {}),
+        // Caller-supplied extra params (shallow-merged last so they can override)
+        ...(this.extraParams ?? {}),
+      };
+      const stream = await withRetry(
+        () =>
+          this.client.chat.completions.create(
+            chatParams as Parameters<(typeof this.client.chat.completions)["create"]>[0] & {
+              stream: true;
+            },
+          ) as Promise<AsyncIterable<OpenAI.Chat.ChatCompletionChunk>>,
+        this.retryOpts,
+        "openai",
+        this._sleep,
+      );
 
       let finishReason: string | null = null;
 
@@ -281,7 +453,10 @@ export class OpenAIProvider implements Provider {
             if (tc.id !== undefined) {
               // First delta for this tool call
               const toolCallId = tc.id;
-              const toolName = tc.function?.name ?? "";
+              // Reverse-translate wire name (e.g. "fs_read") back to original emerge
+              // name (e.g. "fs.read") before emitting to the agent-runner.
+              const wireName = tc.function?.name ?? "";
+              const toolName = nameMap.wireToOriginal.get(wireName) ?? wireName;
               indexToCallId.set(idx, toolCallId);
               callIdToName.set(toolCallId, toolName);
               yield { type: "tool_call_start", toolCallId, name: toolName };
@@ -341,6 +516,10 @@ export class OpenAIProvider implements Provider {
     let outputTokens = 0;
     const callIdToName = new Map<string, string>();
 
+    // Build per-request name map: sanitizes dotted emerge names (e.g. "fs.read" → "fs_read")
+    // and enables reverse-translation of incoming function_call names.
+    const nameMap = buildToolNameMap(req.tools ?? []);
+
     // Build input: filter out system (it goes in system_instructions), flatten rest
     let systemText: string | undefined;
     const inputMessages: Array<{ role: "user" | "assistant"; content: string }> = [];
@@ -380,7 +559,21 @@ export class OpenAIProvider implements Provider {
       }
     }
 
-    // Build tools for Responses API
+    // Responses API rejects empty input arrays. If the agent's first call has only a
+    // system message (placed in `instructions` field), inject a directive user message so
+    // the model engages with the task. Without this, the gateway returns 502 and the real
+    // OpenAI API would return 400. A vague placeholder ("Begin.") makes some models reply
+    // with chat instead of calling the available tools — the directive form below cues
+    // tool use. Callers may override by sending a real user message in req.messages.
+    if (inputMessages.length === 0) {
+      inputMessages.push({
+        role: "user",
+        content:
+          "Please complete the task described in the system instructions. Use the available tools as needed.",
+      });
+    }
+
+    // Build tools for Responses API using sanitized (wire-safe) names
     type ResponsesTool = {
       type: "function";
       name: string;
@@ -391,7 +584,7 @@ export class OpenAIProvider implements Provider {
       req.tools && req.tools.length > 0
         ? req.tools.map((t) => ({
             type: "function" as const,
-            name: t.name,
+            name: nameMap.originalToWire.get(t.name) ?? t.name,
             description: t.description,
             parameters: (t.inputSchema ?? { type: "object" }) as Record<string, unknown>,
           }))
@@ -424,9 +617,28 @@ export class OpenAIProvider implements Provider {
         ...(systemText !== undefined ? { instructions: systemText } : {}),
         ...(responsesTools !== undefined ? { tools: responsesTools } : {}),
         ...(req.maxOutputTokens !== undefined ? { max_output_tokens: req.maxOutputTokens } : {}),
+        // Reasoning for Responses API: effort + optional summary
+        ...(this.reasoning !== undefined
+          ? {
+              reasoning: {
+                effort: this.reasoning.effort,
+                ...(this.reasoning.summary !== undefined
+                  ? { summary: this.reasoning.summary }
+                  : {}),
+              },
+            }
+          : {}),
+        // Caller-supplied extra params (shallow-merged last so they can override)
+        ...(this.extraParams ?? {}),
       };
 
-      const stream = await responsesApi.create(params);
+      // Retry wraps stream creation only — not the iteration.
+      const stream = await withRetry(
+        () => responsesApi.create(params),
+        this.retryOpts,
+        "openai",
+        this._sleep,
+      );
 
       let finishReason: string | null = null;
       // M5: use a Map keyed by item id to handle concurrent tool calls correctly
@@ -451,7 +663,10 @@ export class OpenAIProvider implements Provider {
             // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature requires bracket notation
             const callId = item["call_id"] as string;
             // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature requires bracket notation
-            const name = item["name"] as string;
+            const wireName = item["name"] as string;
+            // Reverse-translate wire name (e.g. "fs_read") back to original emerge
+            // name (e.g. "fs.read") before emitting to the agent-runner.
+            const name = nameMap.wireToOriginal.get(wireName) ?? wireName;
             // biome-ignore lint/complexity/useLiteralKeys: noPropertyAccessFromIndexSignature requires bracket notation
             const itemId = (item["id"] as string | undefined) ?? callId;
             activeToolCallIds.set(itemId, callId);

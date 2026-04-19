@@ -4,12 +4,18 @@
  * Task: Read examples/README.md, summarize it, write the summary to NOTES.md.
  *
  * Environment variables:
- *   ANTHROPIC_API_KEY   (required to run for real; if absent, prints skip message and exits 0)
- *   ANTHROPIC_BASE_URL  (optional; defaults to api.anthropic.com)
- *   ANTHROPIC_MODEL     (optional; defaults to claude-opus-4-7)
+ *   ANTHROPIC_API_KEY       (required to run for real; if absent, prints skip message and exits 0)
+ *   ANTHROPIC_BASE_URL      (optional; defaults to api.anthropic.com)
+ *   ANTHROPIC_MODEL         (optional; defaults to claude-opus-4-7)
+ *   ANTHROPIC_THINKING_BUDGET (optional; positive integer enables extended thinking, e.g. 8192)
  *
  * Run:
  *   ANTHROPIC_API_KEY=sk-ant-... node examples/hello-agent-anthropic/dist/index.js
+ *
+ * With extended thinking (claude-3.7-sonnet or claude-opus-4-x):
+ *   ANTHROPIC_API_KEY=sk-ant-... ANTHROPIC_MODEL=claude-3-7-sonnet-20250219 \
+ *   ANTHROPIC_THINKING_BUDGET=8192 \
+ *     node examples/hello-agent-anthropic/dist/index.js
  */
 
 import fs from "node:fs/promises";
@@ -18,6 +24,7 @@ import { fileURLToPath } from "node:url";
 import type { AgentId, SessionId } from "@emerge/kernel/contracts";
 import { Kernel } from "@emerge/kernel/runtime";
 import { BuiltinModeRegistry, permissionPolicyForMode } from "@emerge/modes";
+import type { AnthropicThinkingConfig } from "@emerge/provider-anthropic";
 import { AnthropicProvider, anthropicSchemaAdapter } from "@emerge/provider-anthropic";
 import { makeRecorder } from "@emerge/replay";
 import { InProcSandbox } from "@emerge/sandbox-inproc";
@@ -44,14 +51,26 @@ async function main() {
   const baseURL = process.env["ANTHROPIC_BASE_URL"];
   // biome-ignore lint/complexity/useLiteralKeys: env access requires bracket notation
   const model = process.env["ANTHROPIC_MODEL"];
+  // biome-ignore lint/complexity/useLiteralKeys: env access requires bracket notation
+  const thinkingBudgetEnv = process.env["ANTHROPIC_THINKING_BUDGET"];
+  const thinkingBudget =
+    thinkingBudgetEnv !== undefined ? Number.parseInt(thinkingBudgetEnv, 10) : undefined;
+  const thinking: AnthropicThinkingConfig | undefined =
+    thinkingBudget !== undefined && !Number.isNaN(thinkingBudget) && thinkingBudget > 0
+      ? { type: "enabled", budget_tokens: thinkingBudget }
+      : undefined;
 
   const provider = new AnthropicProvider({
     apiKey,
     ...(baseURL !== undefined ? { baseURL } : {}),
     ...(model !== undefined ? { model } : {}),
+    ...(thinking !== undefined ? { thinking } : {}),
   });
 
   console.log(`Provider: ${provider.capabilities.id}`);
+  if (thinking !== undefined) {
+    console.log(`  Extended thinking: enabled (budget: ${thinking.budget_tokens} tokens)`);
+  }
 
   const modeRegistry = new BuiltinModeRegistry();
   const policy = permissionPolicyForMode(modeRegistry, "auto");
