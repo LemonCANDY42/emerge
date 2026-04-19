@@ -58,7 +58,7 @@ export interface AdjudicatorBuild {
   watchBus(opts: {
     bus: import("@emerge/kernel/contracts").Bus;
     sessionId: SessionId;
-  }): () => void;
+  }): () => Promise<void>;
 }
 
 class InProcessAdjudicator implements Adjudicator {
@@ -139,9 +139,14 @@ export function buildAdjudicator(opts: BuildAdjudicatorOptions): AdjudicatorBuil
   function watchBus(opts2: {
     bus: import("@emerge/kernel/contracts").Bus;
     sessionId: SessionId;
-  }): () => void {
+  }): () => Promise<void> {
     const { bus, sessionId } = opts2;
     let active = true;
+    // Track in-flight evaluation+verdict-send promises so the returned stop()
+    // function can await them. Without this, calling stop() then endSession()
+    // races: the verdict envelope may be in-flight (not yet on the bus) when
+    // endSession reads _latestVerdict, producing a spurious E_NO_ALIGNED_VERDICT.
+    const inFlight = new Set<Promise<void>>();
 
     /**
      * M2: Subscribe to result envelopes from each known sender individually
@@ -175,24 +180,34 @@ export function buildAdjudicator(opts: BuildAdjudicatorOptions): AdjudicatorBuil
             artifacts: [],
           };
 
-          const verdict = await adjInstance.evaluate(evalInput);
-
-          const corrId = `verdict-${Date.now()}` as CorrelationId;
-          await bus.send({
-            kind: "verdict",
-            correlationId: corrId,
-            sessionId,
-            from: opts.id,
-            to: { kind: "broadcast" },
-            timestamp: Date.now(),
-            verdict,
-          });
+          // Track this evaluate+send pair so stop() can await it before returning.
+          const work = (async () => {
+            const verdict = await adjInstance.evaluate(evalInput);
+            const corrId = `verdict-${Date.now()}` as CorrelationId;
+            await bus.send({
+              kind: "verdict",
+              correlationId: corrId,
+              sessionId,
+              from: opts.id,
+              to: { kind: "broadcast" },
+              timestamp: Date.now(),
+              verdict,
+            });
+          })();
+          inFlight.add(work);
+          work.finally(() => inFlight.delete(work));
         }
       })();
     }
 
-    return () => {
+    return async () => {
       active = false;
+      // Drain in-flight evaluations BEFORE closing subscriptions so verdicts that
+      // were already triggered land on the bus. This eliminates the
+      // stop()→endSession() race that would otherwise produce E_NO_ALIGNED_VERDICT.
+      if (inFlight.size > 0) {
+        await Promise.all([...inFlight]);
+      }
       for (const sub of subs) {
         sub.close();
       }

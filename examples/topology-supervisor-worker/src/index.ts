@@ -597,7 +597,7 @@ async function runTopology(
   console.log(`[custodian] Contract pin in shared Memory: ${contractPinSurvived ? "YES" : "NO"}`);
 
   // End session — postmortem fires automatically → ingest into experienceLibrary
-  stopAdjudicatorWatch();
+  await stopAdjudicatorWatch();
   const endResult = await kernel.endSession();
   if (!endResult.ok) {
     console.error("endSession failed:", endResult.error);
