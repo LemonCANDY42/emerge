@@ -23,6 +23,7 @@ import type {
   EvaluationInput,
   Provider,
   SessionId,
+  SessionRecorder,
   Tool,
   ToolSpec,
   Verdict,
@@ -110,6 +111,38 @@ export interface SessionBuilderOptions {
    * For MockProvider (tests): omit — no adapter needed.
    */
   readonly schemaAdapter?: SchemaAdapter;
+  /**
+   * Optional session recorder. When provided, the kernel will record all
+   * provider_call events as they occur. Call endSession() and inspect
+   * result.value.record to retrieve the SessionRecord for replay.
+   *
+   * Used by tbench-real-replay to record Phase 1 for later replay via
+   * RecordedProvider without incurring real API costs.
+   */
+  readonly recorder?: SessionRecorder | undefined;
+  /**
+   * Session record for replay (from a prior Phase 1 recording).
+   * When provided alongside replayProviderFactory, sets the kernel to
+   * reproducibility:"record-replay" and routes all provider.invoke() calls
+   * through the RecordedProvider, replaying events without real API calls.
+   *
+   * Used by tbench-real-replay Phase 2.
+   */
+  readonly replayRecord?: import("@emerge/kernel/contracts").SessionRecord | undefined;
+  /**
+   * Factory that wraps a SessionRecord + original Provider into a replay
+   * provider. Must be provided together with replayRecord.
+   *
+   * Example:
+   *   import { RecordedProvider } from "@emerge/replay";
+   *   replayProviderFactory: (rec, original) => new RecordedProvider(rec, original.capabilities)
+   */
+  readonly replayProviderFactory?:
+    | ((
+        record: import("@emerge/kernel/contracts").SessionRecord,
+        originalProvider: Provider,
+      ) => Provider)
+    | undefined;
 }
 
 // ─── Built session handle ────────────────────────────────────────────────────
@@ -119,8 +152,14 @@ export interface BuiltSession {
   readonly sessionId: SessionId;
   readonly agentId: AgentId;
   readonly adjudicatorId: AgentId;
-  /** Call before endSession() to tear down adjudicator bus subscriptions. */
-  stopAdjudicatorWatch(): void;
+  /**
+   * Stop the adjudicator's bus subscription. Returns a Promise that resolves
+   * AFTER any in-flight evaluate()+verdict-send pair completes, so a subsequent
+   * `kernel.endSession()` will see the verdict on `_latestVerdict`. Without
+   * awaiting this, endSession may race with the verdict envelope and produce
+   * spurious E_NO_ALIGNED_VERDICT errors.
+   */
+  stopAdjudicatorWatch(): Promise<void>;
   /** Last verdict emitted by the adjudicator (set after runAcceptance is called). */
   getLastVerdict(): Verdict | undefined;
 }
@@ -315,13 +354,28 @@ export function buildSession(opts: SessionBuilderOptions): BuiltSession {
       mode: "off",
       requireVerdictBeforeExit: true,
     },
+    // Optional recorder: enables session recording for replay demos.
+    // The kernel auto-starts the recorder on setSession() when provided.
+    ...(opts.recorder !== undefined ? { recorder: opts.recorder } : {}),
+    // Optional replay: when replayRecord + replayProviderFactory are provided,
+    // the kernel routes all provider.invoke() calls through the RecordedProvider.
+    ...(opts.replayRecord !== undefined ? { replayRecord: opts.replayRecord } : {}),
+    ...(opts.replayProviderFactory !== undefined
+      ? { replayProviderFactory: opts.replayProviderFactory }
+      : {}),
   };
+
+  // Use reproducibility:"record-replay" when replay options are provided.
+  const reproducibility =
+    opts.replayRecord !== undefined && opts.replayProviderFactory !== undefined
+      ? ("record-replay" as const)
+      : ("free" as const);
 
   // Kernel
   const kernel = new Kernel(
     {
       mode: "auto",
-      reproducibility: "free",
+      reproducibility,
       lineage: { maxDepth: 4 },
       bus: { bufferSize: 512 },
       roles: {

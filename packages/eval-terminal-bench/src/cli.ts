@@ -165,7 +165,7 @@ async function main(): Promise<void> {
       console.log(`  stderr:\n${acceptance.stderr.slice(0, 500)}`);
     }
 
-    session.stopAdjudicatorWatch();
+    await session.stopAdjudicatorWatch();
 
     const endResult = await session.kernel.endSession();
     if (!endResult.ok) {

@@ -1,25 +1,27 @@
 /**
- * tbench-real-inline — FIRST real-model Terminal-Bench end-to-end run.
+ * tbench-real-docker — Real-model + Docker sandbox Terminal-Bench run.
  *
- * Same add() bug task as tbench-smoke-inline, but using OpenAIProvider instead
- * of MockProvider. Exercises the full harness path:
- *   - TaskSpec parsing + workspace materialization
- *   - makeTerminalBenchBlueprint (surveillance, adjudicator, verdict gate, autoPermission, baseDir)
- *   - Real model: reads files, understands the bug, writes the fix, runs pytest
- *   - Acceptance runner: python3 -m pytest tests/ -x -q
- *   - Kernel verdict gate: endSession() must see an aligned adjudicator verdict
+ * Mirrors tbench-real-inline but uses HarborSandbox (python:3.12-slim) for
+ * the agent's bash tool calls. Same reverse_string() bug task as
+ * tbench-smoke-docker (Task B), but with the real provider instead of
+ * MockProvider.
+ *
+ * This is the first exercise of HarborSandbox + real provider together.
+ * Per the pre-publish validation plan, 1-2 bugs at this boundary are expected.
  *
  * Environment variables (required to run; exits 0 with skip message if absent):
  *   OPENAI_API_KEY          — API key for the OpenAI-compatible gateway
- *   OPENAI_BASE_URL         — Base URL including /v1 (e.g. https://gmn.example.com/v1)
+ *   OPENAI_BASE_URL         — Base URL including /v1 (e.g. https://host/v1)
  *   OPENAI_MODEL            — Model name (e.g. gpt-5.4, gpt-4o)
  *   OPENAI_PROTOCOL         — "chat" | "responses" (default: "responses")
  *   OPENAI_REASONING_EFFORT — "minimal"|"low"|"medium"|"high"|"xhigh" (optional)
  *
- * This is the FIRST real-model run through the full harness. Bugs found here
- * are documented in M4-REAL-PROVIDER-REPORT.md at repo root.
+ * Docker must be available: `docker --version` must succeed.
+ *
+ * Acceptance: python3 -m pytest tests/ -x -q (run on host via acceptanceSandbox: { kind: "host" })
  */
 
+import { execFileSync } from "node:child_process";
 import fs from "node:fs/promises";
 import path from "node:path";
 import {
@@ -30,43 +32,74 @@ import {
 import { OpenAIProvider, openaiSchemaAdapter } from "@emerge/provider-openai";
 import type { OpenAIProtocol, OpenAIReasoningConfig } from "@emerge/provider-openai";
 
-// ─── Task spec (identical to tbench-smoke-inline Task A) ─────────────────────
+// ─── Task spec (same as tbench-smoke-docker) ─────────────────────────────────
+
+const DOCKER_IMAGE = "python:3.12-slim";
 
 const TASK_SPEC = {
-  id: "real-inline-add-bug",
-  title: "Fix the broken add function",
+  id: "real-docker-string-bug",
+  title: "Fix the broken string reversal function",
   repo: {
     kind: "inline" as const,
     files: {
       "src/__init__.py": "",
-      "src/util.py": `def add(a, b):
-    # BUG: subtraction instead of addition
-    return a - b
+      "src/strings.py": `def reverse_string(s: str) -> str:
+    # BUG: returns original instead of reversed
+    return s
 
 
-def multiply(a, b):
-    return a * b
+def to_upper(s: str) -> str:
+    return s.upper()
 `,
       "tests/__init__.py": "",
-      "tests/test_util.py": `from src.util import add, multiply
+      "tests/test_strings.py": `from src.strings import reverse_string, to_upper
 
 
-def test_add():
-    assert add(1, 2) == 3
-    assert add(0, 0) == 0
-    assert add(-1, 1) == 0
+def test_reverse():
+    assert reverse_string("hello") == "olleh"
+    assert reverse_string("abc") == "cba"
+    assert reverse_string("") == ""
 
 
-def test_multiply():
-    assert multiply(2, 3) == 6
+def test_to_upper():
+    assert to_upper("hello") == "HELLO"
 `,
     },
   },
-  goal: "Fix the bug in src/util.py so that pytest tests/ passes. The add() function currently returns a - b instead of a + b.",
+  goal: "Fix the bug in src/strings.py so that pytest tests/ passes. The reverse_string() function currently returns the original string instead of reversing it. Use bash to install pytest and verify your fix.",
   acceptanceCommand: "python3 -m pytest tests/ -x -q",
-  timeoutSeconds: 120,
+  timeoutSeconds: 180,
   difficulty: "trivial" as const,
 };
+
+// ─── Docker availability check ────────────────────────────────────────────────
+
+function checkDockerAvailable(): { ok: boolean; reason?: string } {
+  try {
+    execFileSync("docker", ["--version"], { stdio: "ignore", timeout: 5000 });
+    return { ok: true };
+  } catch {
+    return { ok: false, reason: "docker binary not found or Docker is not running" };
+  }
+}
+
+function pullDockerImage(image: string): { ok: boolean; reason?: string; durationMs: number } {
+  const start = Date.now();
+  try {
+    console.log(`  Pulling image ${image}...`);
+    execFileSync("docker", ["pull", image], {
+      stdio: ["ignore", "pipe", "pipe"],
+      timeout: 300_000,
+    });
+    return { ok: true, durationMs: Date.now() - start };
+  } catch (err) {
+    return {
+      ok: false,
+      reason: `docker pull ${image} failed: ${String(err)}`,
+      durationMs: Date.now() - start,
+    };
+  }
+}
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
@@ -80,7 +113,7 @@ async function main(): Promise<void> {
         "Run with:\n" +
         "  OPENAI_API_KEY=sk-... OPENAI_BASE_URL=https://host/v1 OPENAI_MODEL=gpt-5.4 \\\n" +
         "    OPENAI_PROTOCOL=responses OPENAI_REASONING_EFFORT=medium \\\n" +
-        "    node examples/tbench-real-inline/dist/index.js",
+        "    node examples/tbench-real-docker/dist/index.js",
     );
     process.exit(0);
   }
@@ -100,21 +133,12 @@ async function main(): Promise<void> {
   const reasoning: OpenAIReasoningConfig | undefined =
     reasoningEffortEnv !== undefined ? { effort: reasoningEffortEnv } : undefined;
 
-  const provider = new OpenAIProvider({
-    apiKey,
-    ...(baseURL !== undefined ? { baseURL } : {}),
-    ...(model !== undefined ? { model } : {}),
-    protocol,
-    ...(reasoning !== undefined ? { reasoning } : {}),
-  });
-
-  const modelId = provider.capabilities.id;
-  const effectiveModel = model ?? "gpt-4o";
-
-  console.log("=== tbench-real-inline — FIRST real-model Terminal-Bench run ===\n");
-  console.log("Task: Fix the broken add() function in src/util.py");
+  console.log("=== tbench-real-docker — Real-model + Docker Terminal-Bench run ===\n");
+  console.log("Task: Fix the broken reverse_string() function in src/strings.py");
   console.log(`Acceptance: ${TASK_SPEC.acceptanceCommand}`);
-  console.log("Sandbox: inproc (no Docker required)");
+  console.log(`Sandbox: HarborSandbox (Docker image: ${DOCKER_IMAGE})`);
+
+  const effectiveModel = model ?? "gpt-4o";
   console.log(`Model: ${effectiveModel} (protocol: ${protocol})`);
   if (reasoning !== undefined) {
     console.log(`Reasoning effort: ${reasoning.effort}`);
@@ -124,7 +148,35 @@ async function main(): Promise<void> {
   }
   console.log();
 
-  // 1. Materialize the inline task spec into a temp workspace
+  // 1. Check Docker
+  console.log("Checking Docker availability...");
+  const dockerCheck = checkDockerAvailable();
+  if (!dockerCheck.ok) {
+    console.log(`\nSKIPPED: ${dockerCheck.reason}`);
+    process.exit(0);
+  }
+  console.log("  Docker is available.");
+
+  // 2. Pull image
+  console.log(`\nPulling Docker image: ${DOCKER_IMAGE}`);
+  const pullResult = pullDockerImage(DOCKER_IMAGE);
+  if (!pullResult.ok) {
+    console.log(`\nSKIPPED: ${pullResult.reason}`);
+    process.exit(0);
+  }
+  console.log(`  Image ready (${pullResult.durationMs}ms)`);
+
+  // 3. Create provider
+  const provider = new OpenAIProvider({
+    apiKey,
+    ...(baseURL !== undefined ? { baseURL } : {}),
+    ...(model !== undefined ? { model } : {}),
+    protocol,
+    ...(reasoning !== undefined ? { reasoning } : {}),
+  });
+
+  // 4. Materialize workspace
+  console.log("\nMaterializing workspace...");
   const matResult = await materializeTask(TASK_SPEC);
   if (!matResult.ok) {
     console.error(`FATAL: Workspace materialization failed: ${matResult.error.message}`);
@@ -132,26 +184,33 @@ async function main(): Promise<void> {
   }
 
   const task = matResult.value;
-  console.log(`Workspace: ${task.workspaceRoot}`);
+  console.log(`  Workspace: ${task.workspaceRoot}`);
 
-  // Confirm the bug is present before running
-  const utilContent = await fs.readFile(path.join(task.workspaceRoot, "src/util.py"), "utf-8");
-  const hasBug = utilContent.includes("return a - b");
-  console.log(`Bug present before run: ${hasBug ? "YES (expected)" : "NO (unexpected!)"}\n`);
+  // Verify bug present
+  const stringsContent = await fs.readFile(
+    path.join(task.workspaceRoot, "src/strings.py"),
+    "utf-8",
+  );
+  const hasBug = stringsContent.includes("return s") && !stringsContent.includes("[::-1]");
+  console.log(`  Bug present before run: ${hasBug ? "YES (expected)" : "NO (unexpected!)"}`);
 
-  // 2. Wire blueprint: surveillance + adjudicator + verdict gate + autoPermission + baseDir
+  // 5. Wire blueprint: Harbor sandbox + real provider
+  // acceptanceSandbox: "host" — python:3.12-slim does not ship with pytest and
+  // --network=none prevents pip install inside the acceptance container.
+  // The agent uses bash inside Docker; acceptance runs on the host.
   const { session, agentSpec } = makeTerminalBenchBlueprint({
     spec: TASK_SPEC,
     workspaceRoot: task.workspaceRoot,
     provider,
-    sandboxMode: "inproc",
+    sandboxMode: "harbor",
+    harborImage: DOCKER_IMAGE,
+    acceptanceSandbox: { kind: "host" },
     schemaAdapter: openaiSchemaAdapter,
-    // Give the real model 20 iterations and 2 min wall time
     maxIterations: 20,
   });
 
-  console.log(`Session: ${session.sessionId}`);
-  console.log(`Provider ID: ${modelId}\n`);
+  console.log(`\nSession: ${session.sessionId}`);
+  console.log(`Provider ID: ${provider.capabilities.id}\n`);
 
   const runStart = Date.now();
 
@@ -164,9 +223,9 @@ async function main(): Promise<void> {
 
     const handle = spawnResult.value;
     console.log(`Agent spawned: ${String(handle.id)}`);
-    console.log("Running perceive → decide → act → observe loop...\n");
+    console.log("Running perceive → decide → act → observe loop (bash calls go to Docker)...\n");
 
-    // 3. Run the agent loop — real model calls happen here
+    // 6. Run agent loop — real model calls + Docker tool execution
     await session.kernel.runAgent(handle);
 
     const snapshot = await handle.snapshot();
@@ -179,22 +238,17 @@ async function main(): Promise<void> {
     console.log(`  USD:        $${snapshot.usage.usd.toFixed(4)}`);
     console.log(`  Wall time:  ${wallMs}ms`);
 
-    // Summarize step count from usage (iterations = tool calls + 1)
-    const iterEst =
-      snapshot.usage.tokensIn > 0
-        ? `~${Math.max(1, Math.ceil(snapshot.usage.tokensOut / 100))} model calls`
-        : "unknown";
-    console.log(`  Est. steps: ${iterEst}\n`);
-
-    // 4. Run standalone acceptance check (for reporting; adjudicator also ran one)
-    console.log(`Running acceptance command: ${TASK_SPEC.acceptanceCommand}`);
+    // 7. Run standalone acceptance on host
+    console.log(`\nRunning acceptance command (host): ${TASK_SPEC.acceptanceCommand}`);
     const acceptance = await runAcceptance(
       TASK_SPEC.acceptanceCommand,
       task.workspaceRoot,
       TASK_SPEC.timeoutSeconds,
+      { kind: "host" },
     );
 
     console.log("\n=== Acceptance Result ===");
+    console.log("  Mode: Host (agent sandbox: Docker via HarborSandbox)");
     console.log(`  Exit code: ${acceptance.exitCode}`);
     console.log(`  Duration:  ${acceptance.durationMs}ms`);
     console.log(`  Verdict:   ${acceptance.verdict.kind}`);
@@ -205,13 +259,18 @@ async function main(): Promise<void> {
       console.log(`  stderr:\n${acceptance.stderr}`);
     }
 
-    // 5. Check whether the fix was actually applied to the file
-    const fixedContent = await fs.readFile(path.join(task.workspaceRoot, "src/util.py"), "utf-8");
-    const bugFixed =
-      fixedContent.includes("return a + b") && !fixedContent.includes("return a - b");
+    // 8. Check fix was applied
+    const fixedContent = await fs.readFile(
+      path.join(task.workspaceRoot, "src/strings.py"),
+      "utf-8",
+    );
+    const bugFixed = fixedContent.includes("[::-1]") && !fixedContent.includes("return s\n");
     console.log(`\nBug fixed (file diff check): ${bugFixed ? "YES" : "NO"}`);
+    if (!bugFixed) {
+      console.log(`  File content:\n${fixedContent}`);
+    }
 
-    // 6. End session — kernel verdict gate: requires adjudicator aligned verdict
+    // 9. End session — kernel verdict gate
     await session.stopAdjudicatorWatch();
     const endResult = await session.kernel.endSession();
 
@@ -222,7 +281,7 @@ async function main(): Promise<void> {
       console.log(`\nSession cost: $${ledger.totals.grand.toFixed(6)}`);
     }
 
-    // 7. Final verdict — all three conditions must be true
+    // 10. Final verdict — all three conditions must be true
     const passed = acceptance.verdict.kind === "aligned" && bugFixed && endResult.ok;
     console.log(`\n=== FINAL RESULT: ${passed ? "PASS" : "FAIL"} ===`);
 
@@ -238,17 +297,17 @@ async function main(): Promise<void> {
         console.error(`  Verdict: ${acceptance.verdict.kind}`);
       }
       if (!bugFixed) {
-        console.error("\nFile content check: src/util.py still contains the bug.");
-        console.error(`  Content preview: ${fixedContent.slice(0, 200)}`);
+        console.error("\nFile content check: src/strings.py still contains the bug.");
       }
       process.exit(1);
     }
 
     console.log("\nAll checks passed:");
-    console.log("  - Bug fixed in src/util.py (file content check)");
+    console.log("  - Bug fixed in src/strings.py (file content check)");
     console.log("  - Acceptance command exited 0 (pytest passed)");
     console.log("  - Kernel verdict gate: adjudicator confirmed aligned verdict");
-    console.log("\nFirst real-model Terminal-Bench run complete.");
+    console.log("  - Agent's bash tool calls executed inside Docker container");
+    console.log("\nReal-model + Docker Terminal-Bench run complete.");
   } finally {
     await task.cleanup();
   }

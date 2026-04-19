@@ -246,7 +246,7 @@ async function main(): Promise<void> {
     console.log(`\nBug fixed: ${bugFixed ? "YES" : "NO"}`);
 
     // 7. End session
-    session.stopAdjudicatorWatch();
+    await session.stopAdjudicatorWatch();
     const endResult = await session.kernel.endSession();
     if (!endResult.ok) {
       // With trustMode=explicit, endSession fails unless the adjudicator emits an aligned verdict.

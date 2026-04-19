@@ -322,7 +322,7 @@ async function main(): Promise<void> {
     console.log(`\nBug fixed: ${bugFixed ? "YES" : "NO"}`);
 
     // 8. End session
-    session.stopAdjudicatorWatch();
+    await session.stopAdjudicatorWatch();
     const endResult = await session.kernel.endSession();
     if (!endResult.ok) {
       console.log(`\nSession end (verdict gate): ${endResult.error.message}`);

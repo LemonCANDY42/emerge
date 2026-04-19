@@ -1,0 +1,22 @@
+{
+  "name": "@emerge/example-tbench-real-multi",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "scripts": {
+    "build": "tsc -b",
+    "typecheck": "tsc -b",
+    "clean": "rm -rf dist *.tsbuildinfo",
+    "start": "node dist/index.js"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0"
+  },
+  "dependencies": {
+    "@emerge/eval-terminal-bench": "workspace:*",
+    "@emerge/kernel": "workspace:*",
+    "@emerge/provider-openai": "workspace:*",
+    "@emerge/sandbox-inproc": "workspace:*"
+  }
+}
