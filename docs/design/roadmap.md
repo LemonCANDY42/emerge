@@ -6,6 +6,39 @@ rounds of research (2026 agent landscape, then Terminal-Bench leaderboard)
 revealed surfaces that should land sooner — and because the original
 "M6: TUI" was way too late given the developer-experience requirement.
 
+## Strategic pause (2026-04-19)
+
+After M4-prep + the provider hardening work (retry + reasoning + tool-name
+sanitization + `/v1` baseURL fix + empty-input fix), the project has
+30+ packages, 505 tests, 38 ADRs of clean infrastructure — but **zero
+public benchmark scores and zero real users**. Each first-contact with
+a real model surface (today: gateway 502s, dotted tool names breaking
+OpenAI spec, empty-input array, models choosing text over tool calls)
+exposes friction that internal mock-driven testing cannot find.
+
+**Decision: pause kernel feature work** (M4 persistence, M5 memory) and
+shift focus to user-facing validation:
+
+1. **Get one real Terminal-Bench 2.0 task to pass end-to-end** with a
+   real model (not the mock). Debug whatever surfaces. The smoke
+   demos pass; real tasks will not, on the first try.
+2. **Publish v0.1 to npm** with an honest README — "infrastructure
+   shipped, no leaderboard score yet." The act of publishing forces
+   honest self-description.
+3. **Find 3 specific people who care about the auditability /
+   reproducibility / self-host thesis** (regulated industry, security
+   teams, anyone needing verdict provenance + cost ledger + replay).
+   Show them the dashboard + replay + verdict trail. Listen.
+
+If real signal arrives in 2-3 weeks, resume M4/M5 with that signal.
+If not, the dual thesis is right but market timing is wrong, and that
+is a more expensive truth to surface late than early.
+
+The deferred milestones below remain valid designs; they are paused,
+not abandoned. The contracts they would build against are already
+shipped at M0 and have survived 4 milestone rounds without change —
+so the resume cost is low.
+
 ## Shipped (on `main`)
 
 ### M0 — Contracts frozen
@@ -192,7 +225,7 @@ This is intentionally pre-M4 (persistence) because TB 2.0 tasks fit in
 single-process sessions; persistence is M4 only after we know what the
 real bottlenecks are.
 
-### M4 — Persistence + resume
+### M4 — Persistence + resume *(DEFERRED — see Strategic pause)*
 **Goal:** sessions survive process restarts; long-running tasks resume
 from the last completed tool.
 
@@ -203,7 +236,7 @@ from the last completed tool.
 - The replay tier and the experience library both gain durable
   storage.
 
-### M5 — Memory + experience write-back at scale
+### M5 — Memory + experience write-back at scale *(DEFERRED — see Strategic pause)*
 **Goal:** smarter session-over-session through a real
 ExperienceLibrary backend.
 

@@ -559,6 +559,20 @@ export class OpenAIProvider implements Provider {
       }
     }
 
+    // Responses API rejects empty input arrays. If the agent's first call has only a
+    // system message (placed in `instructions` field), inject a directive user message so
+    // the model engages with the task. Without this, the gateway returns 502 and the real
+    // OpenAI API would return 400. A vague placeholder ("Begin.") makes some models reply
+    // with chat instead of calling the available tools — the directive form below cues
+    // tool use. Callers may override by sending a real user message in req.messages.
+    if (inputMessages.length === 0) {
+      inputMessages.push({
+        role: "user",
+        content:
+          "Please complete the task described in the system instructions. Use the available tools as needed.",
+      });
+    }
+
     // Build tools for Responses API using sanitized (wire-safe) names
     type ResponsesTool = {
       type: "function";
