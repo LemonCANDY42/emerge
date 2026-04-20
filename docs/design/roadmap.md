@@ -6,38 +6,26 @@ rounds of research (2026 agent landscape, then Terminal-Bench leaderboard)
 revealed surfaces that should land sooner — and because the original
 "M6: TUI" was way too late given the developer-experience requirement.
 
-## Strategic pause (2026-04-19)
+## Strategic pause note (2026-04-19 → resumed 2026-04-20)
 
-After M4-prep + the provider hardening work (retry + reasoning + tool-name
-sanitization + `/v1` baseURL fix + empty-input fix), the project has
-30+ packages, 505 tests, 38 ADRs of clean infrastructure — but **zero
-public benchmark scores and zero real users**. Each first-contact with
-a real model surface (today: gateway 502s, dotted tool names breaking
-OpenAI spec, empty-input array, models choosing text over tool calls)
-exposes friction that internal mock-driven testing cannot find.
+After v0.1.0 shipped (30+ packages, 505 tests, 38 ADRs, real-model
+verified), the project paused kernel feature work to validate the
+auditability + reproducibility thesis with real users and a real
+benchmark score. That pause is now **resolved**: per user direction
+2026-04-20, M4 / M5 / topologies / UI work resumes based on the
+research-driven handoff in
+[`docs/design/v0.2-handoff.md`](./v0.2-handoff.md).
 
-**Decision: pause kernel feature work** (M4 persistence, M5 memory) and
-shift focus to user-facing validation:
+User-finding (Terminal-Bench public submission + finding 3
+regulated-industry users) remains paused — not abandoned. The
+benchmark submission and user outreach are post-v0.2 activities;
+M4 / M5 / topologies / UI work resumes per user direction 2026-04-20.
+The "find 3 users" part of the pause remains paused — user-finding
+happens in parallel with v0.2 dev, not as a gate.
 
-1. **Get one real Terminal-Bench 2.0 task to pass end-to-end** with a
-   real model (not the mock). Debug whatever surfaces. The smoke
-   demos pass; real tasks will not, on the first try.
-2. **Publish v0.1 to npm** with an honest README — "infrastructure
-   shipped, no leaderboard score yet." The act of publishing forces
-   honest self-description.
-3. **Find 3 specific people who care about the auditability /
-   reproducibility / self-host thesis** (regulated industry, security
-   teams, anyone needing verdict provenance + cost ledger + replay).
-   Show them the dashboard + replay + verdict trail. Listen.
-
-If real signal arrives in 2-3 weeks, resume M4/M5 with that signal.
-If not, the dual thesis is right but market timing is wrong, and that
-is a more expensive truth to surface late than early.
-
-The deferred milestones below remain valid designs; they are paused,
-not abandoned. The contracts they would build against are already
-shipped at M0 and have survived 4 milestone rounds without change —
-so the resume cost is low.
+The contracts the deferred milestones build against have survived 4
+milestone rounds + 2 research absorption passes without change — so
+the resume cost is low.
 
 ## Shipped (on `main`)
 
@@ -225,29 +213,119 @@ This is intentionally pre-M4 (persistence) because TB 2.0 tasks fit in
 single-process sessions; persistence is M4 only after we know what the
 real bottlenecks are.
 
-### M4 — Persistence + resume *(DEFERRED — see Strategic pause)*
+### M4 — Persistence + resume *(v0.2 — In progress)*
 **Goal:** sessions survive process restarts; long-running tasks resume
-from the last completed tool.
+from the last completed tool call without re-executing anything.
 
-- `@lwrf42/emerge-persistence-sqlite`. Tools are the checkpoint boundary
-  (already established in ADR 0005). Resume reads recorded outputs;
-  never re-prompts the model.
-- `WorkspaceManager.list()` becomes durable across processes.
-- The replay tier and the experience library both gain durable
-  storage.
+See [`docs/design/v0.2-handoff.md`](./v0.2-handoff.md) §7.1 for the
+full design sketch.
 
-### M5 — Memory + experience write-back at scale *(DEFERRED — see Strategic pause)*
-**Goal:** smarter session-over-session through a real
-ExperienceLibrary backend.
+- `@lwrf42/emerge-persistence-sqlite`: SQLite (`better-sqlite3`)
+  checkpoint store. Schema: `sessions` + `checkpoints` (keyed on
+  `session_id, tool_call_id`) + `provider_calls` + `verdicts` +
+  `bg_processes`. `PRAGMA user_version = 1` for schema versioning;
+  rebuild on mismatch.
+- Session index: `~/.emerge/sessions/index.jsonl` (one line per
+  session) for fast `emerge status` listing without parsing all
+  session JSONL.
+- `Kernel.spawn()` gains optional `resumeSessionId`; already-completed
+  tool calls return recorded results (idempotent replay, never
+  re-executes).
+- `WorkspaceManager.list()` reads from the `sessions` table (durable
+  across restarts).
+- `emerge status` CLI subcommand: lists all sessions with start / end
+  time, contract ref, cost, and verdict.
+- New built-in tools (Droid + TongAgents pattern): `env.bootstrap`
+  (one-shot environmental probe), `bash.background` /
+  `bash.poll` / `bash.kill` triple, `tool.async_complete` bus
+  envelope, `tool_progress` JSONL event.
+- Migration: existing JSONL sessions remain readable;
+  `emerge index <session-id>` builds the SQLite index from JSONL on
+  demand.
+- ADR 0039: persistence storage choice.
 
-- `@lwrf42/emerge-memory-sqlite` with multi-strategy associative recall
-  (semantic + structural + temporal + causal) and a real
-  `RecallTrace`. Compression runs out-of-band; pinned items are
-  non-droppable.
-- `@lwrf42/emerge-experience-sqlite` with merge-optimization on ingest,
-  bundle import / export, and similarity-based cross-session
-  matching. Postmortem now drives a real learning loop.
-- Surveillance's `experienceHints` consume real priors.
+### M5 — Memory + experience at scale *(v0.2 — In progress)*
+**Goal:** smarter session-over-session through a real multi-strategy
+memory backend.
+
+See [`docs/design/v0.2-handoff.md`](./v0.2-handoff.md) §7.2 for the
+full design sketch.
+
+- `@lwrf42/emerge-memory-sqlite`: SQLite source-of-truth + sqlite-vec
+  semantic index. Four-strategy recall: semantic (sqlite-vec
+  brute-force, 384-dim embeddings via `@xenova/transformers` worker
+  thread) + structural (SQL JSON extract) + temporal (SQL date range)
+  + causal (recursive CTE on `memory_links` with SageAgent typed-edge
+  enum: `caused / refers / summarizes / supersedes / contradicts`).
+  `RecallTrace` on every recall per ADR 0004. Compression pipeline:
+  working → episodic (token-threshold trigger) → archived (time-based).
+  Pinned items non-droppable at all tiers.
+- `@lwrf42/emerge-experience-sqlite`: persistent `ExperienceLibrary`
+  backend. Same SQLite file as memory; indexed on `(task_type,
+  approach_fp)`. Replaces `emerge-experience-inmemory` for production
+  deployments that need cross-restart experience persistence.
+- Surveillance's `experienceHints` now survive process restarts;
+  `topology-supervisor-worker` extended assertion: kill the process
+  between run 1 and run 2; restart; run 2 still sees hints from run 1.
+- ADR 0040: memory recall architecture (sqlite-vec default; LanceDB
+  documented as migration path for > 1M items or BM25 hybrid search
+  requirement).
+
+### mesh / tree / debate topologies *(v0.2 — In progress)*
+**Goal:** demonstrate emergent efficiency on real tasks with
+multi-agent coordination beyond the existing supervisor / worker /
+pool / pipeline patterns.
+
+See [`docs/design/v0.2-handoff.md`](./v0.2-handoff.md) §7.3 for API
+sketches and demo plans.
+
+- `mesh()` builder: all-to-all bus ACL, shared broadcast topic,
+  quiescence termination (all agents reach `idle` state per MetaGPT
+  pattern), `maxTurns` ceiling, `maxMembers = 6` ceiling (N²
+  enforcement — use `tree()` beyond 6).
+- `tree()` builder: recursive `supervisorWorker` instances using
+  `Topology.nested`. Root decomposes → mid-level supervisors → leaf
+  workers; results propagate upward. Per-level `providerHint`
+  accepted (SageAgent heterogeneous-model pattern). Optional
+  `reviewer` peer at each level (Capy pattern).
+- `debate()` builder: N debaters (each with assigned stance) + 1 LLM
+  moderator. Moderator calls
+  `select_next_speaker(candidates, truncated_history)` each round;
+  calls `terminate(resolution)` to end. Pattern: AutoGen
+  `SelectorGroupChat` adapted to emerge's bus.
+- All three accept a per-leaf workspace strategy (default: one git
+  worktree per leaf agent — Capy pattern).
+- Specialist blueprints
+  (`code-worker / knowledge-worker / ops-worker / qa-worker`) ship
+  alongside as composable building blocks for `tree()` (Droid
+  pattern).
+- Efficiency measurement: success_rate / token_cost vs. single-agent
+  baseline for each topology at 3 agent-count configurations.
+  Reported as a 3 × 4 matrix per topology.
+- ADR 0041: mesh / tree / debate topology semantics.
+
+### Interactive TUI + web visualization *(v0.2 — In progress)*
+**Goal:** topology graph clickable with per-agent drill-down; TUI
+panel-switching; global view in browser.
+
+See [`docs/design/v0.2-handoff.md`](./v0.2-handoff.md) §7.4 for the
+implementation sketch.
+
+- TUI: `Tab` cycles panels (topology / verdicts / inspector / cost /
+  pinned); `Enter` selects an agent for the inspector panel; `Esc`
+  returns. New `AgentInspector` component shows role, state, token
+  usage, verdicts, pinned items.
+- Dashboard `TopologyGraph.tsx`: upgraded from pure SVG to
+  `@xyflow/react` + ELK.js auto-layout. Clickable agent nodes open a
+  right-panel `AgentInspector`. Supports mesh cross-edges (not
+  possible with the BFS SVG layout).
+- Dashboard `AgentInspector`: message history (last 20), tool calls
+  (last 10), all verdicts for the selected agent.
+- Dashboard URL: `?agent=<id>` deep-links to the agent inspector for
+  sharing and bookmarking (Phoenix pattern).
+- WebSocket bridge: + `agent.selected` (client → server) and
+  + `agent.detail` (server → client) RPC frame kinds.
+- ADR 0042: interactive UI navigation and drill-down model.
 
 ### Beyond M5
 - **Speculative branch-and-merge**: contracts shipped at M0; impl waits
@@ -258,8 +336,6 @@ ExperienceLibrary backend.
   `@lwrf42/emerge-sandbox-harbor`, `TerminalBenchBlueprint`): the Python
   bridge + container exec + the standard agent blueprint that runs
   Harbor tasks. Plan in `docs/design/terminal-bench-integration-plan.md`.
-- **mesh / tree / debate topologies**: more topology builders once the
-  base patterns prove stable.
 - **VS Code extension**: sidebar reading the JSONL stream (M3c2's
   schema unlocks this).
 

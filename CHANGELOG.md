@@ -1,5 +1,84 @@
 # CHANGELOG
 
+## v0.2.0 — In progress
+
+Four workstreams (see [`docs/design/v0.2-handoff.md`](./docs/design/v0.2-handoff.md)):
+- M4 — Persistence + Resume
+- M5 — Memory at scale
+- mesh / tree / debate topologies
+- Interactive TUI + web visualization
+
+Built on absorbed ideas from Claude Code (memory layout), Aider (repomap),
+top TB 2.0 frameworks (ForgeCode, TongAgents, SageAgent, Droid, Capy),
+AutoGen group chat (mesh + debate), Phoenix UI (drill-down), and others.
+
+### M4 — Persistence + Resume
+
+- `@lwrf42/emerge-persistence-sqlite`: tool-call checkpointing in SQLite
+  (`better-sqlite3`); `PRAGMA user_version` schema versioning; session
+  index (`~/.emerge/sessions/index.jsonl`)
+- `Kernel.spawn()` gains optional `resumeSessionId`; already-completed
+  tool calls return recorded results without re-execution
+- `WorkspaceManager.list()` becomes durable across process restarts
+- `emerge status` CLI subcommand lists all sessions
+- New built-in tools (Droid + TongAgents pattern): `env.bootstrap`,
+  `bash.background` / `bash.poll` / `bash.kill` triple,
+  `tool.async_complete` bus envelope, `tool_progress` JSONL event
+
+### M5 — Memory at scale
+
+- `@lwrf42/emerge-memory-sqlite`: multi-strategy recall
+  (semantic + structural + temporal + causal), real `RecallTrace` per
+  ADR 0004, sqlite-vec for semantic indexing, embedding worker thread
+  (`@xenova/transformers`); SageAgent-inspired typed-edge enum on
+  `memory_links` (`caused / refers / summarizes / supersedes /
+  contradicts`)
+- `@lwrf42/emerge-experience-sqlite`: persistent `ExperienceLibrary`
+  backend (replaces `emerge-experience-inmemory` for durable
+  deployments)
+- Compression pipeline: working → episodic (token-threshold) →
+  archived (time-based); pinned items non-droppable at all tiers
+- `examples/memory-ablation/` reports success-rate + token-cost across
+  the four recall strategies (SageAgent ablation pattern)
+
+### mesh / tree / debate topologies
+
+- `mesh()` topology builder: all-to-all ACL, shared broadcast topic,
+  quiescence termination, `maxMembers = 6` ceiling (N² enforcement)
+- `tree()` topology builder: recursive `supervisorWorker` using
+  `Topology.nested`; per-level `providerHint` for heterogeneous-model
+  composition (SageAgent pattern); optional `reviewer` peer per level
+  (Capy pattern)
+- `debate()` topology builder: N debaters + LLM moderator
+  (`select_next_speaker` + `terminate` tools)
+- Per-leaf workspace strategy defaults to one git worktree per leaf
+  agent (Capy pattern)
+- Specialist blueprints
+  (`code-worker / knowledge-worker / ops-worker / qa-worker` —
+  Droid pattern)
+- Three new demo examples (one per topology); efficiency measurement
+  (success_rate / token_cost vs. single-agent baseline) per demo
+
+### Interactive TUI + web visualization
+
+- TUI: panel-key-switching (`Tab`), `AgentInspector` panel
+  (arrow-key navigation, `Enter` to select, `Esc` to return)
+- Dashboard `TopologyGraph.tsx`: pure SVG → `@xyflow/react` + ELK.js
+  auto-layout; clickable agent nodes
+- Dashboard `AgentInspector` side panel: message history, tool calls,
+  verdicts per agent
+- Dashboard: `?agent=<id>` URL parameter for deep-linking (Phoenix
+  pattern)
+- WebSocket bridge: + `agent.selected` and + `agent.detail` RPC frame
+  kinds
+
+### ADRs reserved
+
+0039 (persistence storage) · 0040 (memory recall) · 0041 (mesh / tree /
+debate semantics) · 0042 (interactive UI navigation)
+
+---
+
 ## v0.1.0 — 2026-04
 
 First npm publish of the `@lwrf42/emerge-*` package family. Packages are published under the `@lwrf42` personal npm scope because the `@emerge` org is not yet registered on npm. The package contents and import shape (modulo the scope prefix) match what `@emerge/*` will be once that org is claimed.
